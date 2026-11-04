@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const createAppointmentZod = z.object({
   doctor: z.string().trim().min(1),
+  description: z.string().trim().nullable().optional(),
   date: z.coerce.date(),
   time: z.string().trim().min(1),
 });

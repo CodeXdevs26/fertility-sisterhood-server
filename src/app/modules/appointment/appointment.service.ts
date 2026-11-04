@@ -14,12 +14,14 @@ const create = async (authId: string, payload: TCreateAppointment) =>
     data: {
       authId,
       doctor: payload.doctor,
+      description: payload.description,
       date: payload.date,
       time: payload.time,
     },
     select: {
       id: true,
       doctor: true,
+      description: true,
       date: true,
       time: true,
       createdAt: true,
@@ -38,6 +40,7 @@ const getMy = async (authId: string, options: TPaginationOptions) => {
       select: {
         id: true,
         doctor: true,
+        description: true,
         date: true,
         time: true,
         createdAt: true,
@@ -54,6 +57,7 @@ const getSingle = async (authId: string, id: string) => {
     select: {
       id: true,
       doctor: true,
+      description: true,
       date: true,
       time: true,
       createdAt: true,
@@ -81,6 +85,7 @@ const update = async (
     select: {
       id: true,
       doctor: true,
+      description: true,
       date: true,
       time: true,
       createdAt: true,
@@ -98,7 +103,14 @@ const remove = async (authId: string, id: string) => {
   await prisma.question.deleteMany({ where: { appointmentId: id } });
   return prisma.appointment.delete({
     where: { id },
-    select: { id: true, doctor: true, date: true, time: true, createdAt: true },
+    select: {
+      id: true,
+      doctor: true,
+      description: true,
+      date: true,
+      time: true,
+      createdAt: true,
+    },
   });
 };
 
