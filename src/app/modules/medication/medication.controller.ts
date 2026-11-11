@@ -22,6 +22,19 @@ const getMy = handleAsyncRequest(async (req: TRequest, res: Response) => {
   sendResponse(res, { message: "Medications fetched successfully!", data });
 });
 
+const markTakenToday = handleAsyncRequest(
+  async (req: TRequest, res: Response) => {
+    const data = await medicationServices.markTakenToday(
+      req.user!.id,
+      req.params.id as string
+    );
+    sendResponse(res, {
+      message: "Medication marked as taken for today!",
+      data,
+    });
+  }
+);
+
 const getSingle = handleAsyncRequest(async (req: TRequest, res: Response) => {
   const data = await medicationServices.getSingle(
     req.user!.id,
@@ -50,6 +63,7 @@ const remove = handleAsyncRequest(async (req: TRequest, res: Response) => {
 export const medicationController = {
   create,
   getMy,
+  markTakenToday,
   getSingle,
   update,
   remove,

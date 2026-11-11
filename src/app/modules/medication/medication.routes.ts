@@ -12,6 +12,7 @@ const router = Router();
 router.use(authorize(UserRole.USER));
 router.post("/", validate(createMedicationZod), medicationController.create);
 router.get("/", medicationController.getMy);
+router.patch("/:id/taken", medicationController.markTakenToday);
 router.get("/:id", medicationController.getSingle);
 router.patch(
   "/:id",
