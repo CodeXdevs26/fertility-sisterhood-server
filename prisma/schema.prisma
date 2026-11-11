@@ -23,6 +23,7 @@ model Auth {
   symptoms      Symptom[]
   appointments  Appointment[]
   medications   Medication[]
+  supplements   Supplement[]
   journals      Journal[]
   checklists    Checklist[]
   costs         Cost[]
@@ -90,6 +91,27 @@ model MedicationChecklist {
   id           String     @id @default(auto()) @map("_id") @db.ObjectId
   medicationId String     @db.ObjectId
   medication   Medication @relation(fields: [medicationId], references: [id])
+  date         DateTime   @default(now())
+}
+
+model Supplement {
+  id                   String                @id @default(auto()) @map("_id") @db.ObjectId
+  authId               String                @db.ObjectId
+  auth                 Auth                  @relation(fields: [authId], references: [id])
+  name                 String
+  dose                 String
+  frequency            String
+  type                 String
+  startDate            DateTime
+  endDate              DateTime
+  createdAt            DateTime              @default(now())
+  supplementChecklists SupplementChecklist[]
+}
+
+model SupplementChecklist {
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
+  supplementId String     @db.ObjectId
+  supplement   Supplement @relation(fields: [supplementId], references: [id])
   date         DateTime   @default(now())
 }
 

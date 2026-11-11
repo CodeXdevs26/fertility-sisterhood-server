@@ -6,6 +6,7 @@ import { notificationRoutes } from "../modules/notification/notification.routes.
 import { symptomRoutes } from "../modules/symptom/symptom.routes.js";
 import { appointmentRoutes } from "../modules/appointment/appointment.routes.js";
 import { medicationRoutes } from "../modules/medication/medication.routes.js";
+import { supplementRoutes } from "../modules/supplement/supplement.routes.js";
 import { journalRoutes } from "../modules/journal/journal.routes.js";
 import { checklistRoutes } from "../modules/checklist/checklist.routes.js";
 import { profileRoutes } from "../modules/profile/profile.routes.js";
@@ -28,6 +29,7 @@ const routes = [
   { path: "/symptoms", route: symptomRoutes },
   { path: "/appointments", route: appointmentRoutes },
   { path: "/medications", route: medicationRoutes },
+  { path: "/supplements", route: supplementRoutes },
   { path: "/journals", route: journalRoutes },
   { path: "/checklists", route: checklistRoutes },
   { path: "/costs", route: costRoutes },
