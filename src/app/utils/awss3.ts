@@ -39,7 +39,7 @@ export const uploadImage = multer({
 //upload a single file
 export const uploadToS3 = async (file: TFile): Promise<string> => {
   if (!file) throw new ApiError(400, "File is required");
-  const fileName = `site-source/${Date.now()}-${file.originalname}`;
+  const fileName = `fertility-sisterhood/${Date.now()}-${file.originalname}`;
 
   const command = new PutObjectCommand({
     Bucket: config.aws.bucket,
@@ -63,19 +63,18 @@ export const uploadToS3 = async (file: TFile): Promise<string> => {
   }
 };
 
-// // delete file from s3 bucket
 export const deleteFromS3 = async (url: string) => {
-  const key = decodeURIComponent(
-    url.split(config.aws.s3BaseUrl as string)[1] as string
-  );
-
-  try {
-    const command = new DeleteObjectCommand({
-      Bucket: config.aws.bucket,
-      Key: key,
-    });
-    await s3Client.send(command);
-  } catch (error) {
-    console.log("🚀 ~ deleteFromS3 ~ error:", error);
+  const baseUrl = config.aws.s3BaseUrl;
+  if (!baseUrl || !url.startsWith(baseUrl)) {
+    throw new ApiError(400, "Invalid S3 file URL");
   }
+
+  const key = decodeURIComponent(url.slice(baseUrl.length));
+  if (!key) throw new ApiError(400, "Invalid S3 file URL");
+
+  const command = new DeleteObjectCommand({
+    Bucket: config.aws.bucket,
+    Key: key,
+  });
+  await s3Client.send(command);
 };

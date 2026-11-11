@@ -35,4 +35,12 @@ const getSingle = handleAsyncRequest(async (req: TRequest, res: Response) => {
   sendResponse(res, { message: "Photo fetched successfully!", data });
 });
 
-export const photoController = { create, getMy, getSingle };
+const remove = handleAsyncRequest(async (req: TRequest, res: Response) => {
+  const data = await photoServices.remove(
+    req.user!.id,
+    req.params.id as string
+  );
+  sendResponse(res, { message: "Photo deleted successfully!", data });
+});
+
+export const photoController = { create, getMy, getSingle, remove };

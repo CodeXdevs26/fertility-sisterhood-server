@@ -1,6 +1,6 @@
 import ApiError from "../../classes/ApiError.js";
 import { TFile } from "../../interface/file.interface.js";
-import { uploadToS3 } from "../../utils/awss3.js";
+import { deleteFromS3, uploadToS3 } from "../../utils/awss3.js";
 import {
   calculatePagination,
   TPaginationOptions,
@@ -46,7 +46,7 @@ const getMy = async (
       skip,
       take,
       orderBy: { date: "desc" },
-      select: { caption: true, fileSize: true, date: true },
+      select: { caption: true, fileSize: true, file: true, date: true },
     }),
     prisma.photo.count({ where }),
   ]);
@@ -70,4 +70,30 @@ const getSingle = async (authId: string, id: string) => {
   return photo;
 };
 
-export const photoServices = { create, getMy, getSingle };
+const remove = async (authId: string, id: string) => {
+  const photo = await prisma.photo.findFirst({
+    where: { id, authId },
+    select: {
+      id: true,
+      caption: true,
+      milestone: true,
+      date: true,
+      file: true,
+      fileSize: true,
+    },
+  });
+  if (!photo) throw new ApiError(404, "Photo not found");
+
+  await deleteFromS3(photo.file);
+  await prisma.photo.delete({ where: { id } });
+
+  return {
+    id: photo.id,
+    caption: photo.caption,
+    milestone: photo.milestone,
+    date: photo.date,
+    fileSize: photo.fileSize,
+  };
+};
+
+export const photoServices = { create, getMy, getSingle, remove };

@@ -16,5 +16,6 @@ router.post(
 );
 router.get("/", photoController.getMy);
 router.get("/:id", photoController.getSingle);
+router.delete("/:id", photoController.remove);
 
 export const photoRoutes = router;
