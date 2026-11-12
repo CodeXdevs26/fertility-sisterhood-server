@@ -2,7 +2,6 @@ import { Router } from "express";
 import { legalRoutes } from "../modules/legal/legal.routes.js";
 import { authRoutes } from "../modules/auth/auth.routes.js";
 import { otpRoutes } from "../modules/otp/otp.routes.js";
-import { notificationRoutes } from "../modules/notification/notification.routes.js";
 import { symptomRoutes } from "../modules/symptom/symptom.routes.js";
 import { appointmentRoutes } from "../modules/appointment/appointment.routes.js";
 import { medicationRoutes } from "../modules/medication/medication.routes.js";
@@ -17,6 +16,7 @@ import { questionRoutes } from "../modules/question/question.routes.js";
 import { documentRoutes } from "../modules/document/document.routes.js";
 import { supportRoutes } from "../modules/support/support.routes.js";
 import { photoRoutes } from "../modules/photo/photo.routes.js";
+import { subscriptionRoutes } from "../modules/subscription/subscription.routes.js";
 
 const router = Router();
 
@@ -25,7 +25,6 @@ const routes = [
   { path: "/auth", route: authRoutes },
   { path: "/otp", route: otpRoutes },
   { path: "/profile", route: profileRoutes },
-  { path: "/notifications", route: notificationRoutes },
   { path: "/symptoms", route: symptomRoutes },
   { path: "/appointments", route: appointmentRoutes },
   { path: "/medications", route: medicationRoutes },
@@ -39,6 +38,7 @@ const routes = [
   { path: "/documents", route: documentRoutes },
   { path: "/support", route: supportRoutes },
   { path: "/photos", route: photoRoutes },
+  { path: "/subscriptions", route: subscriptionRoutes },
 ];
 
 routes.forEach(route => {

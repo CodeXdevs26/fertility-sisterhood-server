@@ -33,6 +33,7 @@ model Auth {
   questions     Question[]
   documents     Document[]
   photos        Photo[]
+  subscription  Subscription?
 }
 
 model OTP {
@@ -237,6 +238,40 @@ model Support {
   description String
   status      SupportStatus @default(PENDING)
   createdAt   DateTime      @default(now())
+}
+
+model SubscriptionPlan {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  title           String
+  description     String
+  price           Float
+  stripeProductId String
+  stripePriceId   String
+  updatedAt       DateTime @updatedAt
+}
+
+model Subscription {
+  id                   String             @id @default(auto()) @map("_id") @db.ObjectId
+  authId               String             @unique @db.ObjectId
+  auth                 Auth               @relation(fields: [authId], references: [id])
+  stripeCustomerId     String
+  stripeSubscriptionId String
+  status               SubscriptionStatus @default(INCOMPLETE)
+  cancelAtPeriodEnd    Boolean            @default(false)
+  currentPeriodEnd     DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+}
+
+enum SubscriptionStatus {
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+  PAUSED
 }
 
 enum SupportStatus {

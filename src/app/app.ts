@@ -7,6 +7,10 @@ import routeNotFoundHandler from "./middlewares/routeNotFoundHandler.js";
 
 const app: Application = express();
 
+app.use(
+  "/api/v1/subscriptions/webhook",
+  express.raw({ type: "application/json" })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(

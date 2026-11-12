@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { UserRole } from "@prisma/client";
 import authorize from "../../middlewares/authorize.js";
+import requirePremium from "../../middlewares/requirePremium.js";
 import validate from "../../middlewares/validate.js";
 import { checklistController } from "./checklist.controller.js";
 import {
@@ -9,7 +10,7 @@ import {
 } from "./checklist.validation.js";
 
 const router = Router();
-router.use(authorize(UserRole.USER));
+router.use(authorize(UserRole.USER), requirePremium);
 router.post("/", validate(createChecklistZod), checklistController.create);
 router.get("/today", checklistController.getToday);
 router.patch("/:id/done", checklistController.markDone);
