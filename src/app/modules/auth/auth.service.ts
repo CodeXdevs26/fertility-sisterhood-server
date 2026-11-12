@@ -212,6 +212,11 @@ const getAll = async (
     });
   }
 
+  const status = String(query.status || "").toUpperCase();
+  if (status === UserStatus.ACTIVE || status === UserStatus.BLOCKED) {
+    andConditions.push({ status });
+  }
+
   const whereConditions: Prisma.AuthWhereInput =
     andConditions.length > 0 ? { AND: andConditions } : {};
 
@@ -223,6 +228,7 @@ const getAll = async (
       email: true,
       name: true,
       role: true,
+      status: true,
       createdAt: true,
     },
     skip,
@@ -254,8 +260,17 @@ const getSingle = async (id: string) => {
       role: true,
       status: true,
       createdAt: true,
+      subscription: {
+        select: {
+          status: true,
+          cancelAtPeriodEnd: true,
+          currentPeriodEnd: true,
+          createdAt: true,
+        },
+      },
     },
   });
+  if (!auth) throw new ApiError(404, "User not found");
 
   return auth;
 };

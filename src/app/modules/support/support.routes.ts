@@ -16,6 +16,7 @@ router.post(
   supportController.send
 );
 router.get("/", authorize(UserRole.ADMIN), supportController.getAll);
+router.get("/:id", authorize(UserRole.ADMIN), supportController.getSingle);
 router.patch(
   "/:id/status",
   authorize(UserRole.ADMIN),

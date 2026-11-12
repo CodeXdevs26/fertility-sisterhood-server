@@ -17,6 +17,7 @@ import { documentRoutes } from "../modules/document/document.routes.js";
 import { supportRoutes } from "../modules/support/support.routes.js";
 import { photoRoutes } from "../modules/photo/photo.routes.js";
 import { subscriptionRoutes } from "../modules/subscription/subscription.routes.js";
+import { metaRoutes } from "../modules/meta/meta.routes.js";
 
 const router = Router();
 
@@ -39,6 +40,7 @@ const routes = [
   { path: "/support", route: supportRoutes },
   { path: "/photos", route: photoRoutes },
   { path: "/subscriptions", route: subscriptionRoutes },
+  { path: "/meta", route: metaRoutes },
 ];
 
 routes.forEach(route => {

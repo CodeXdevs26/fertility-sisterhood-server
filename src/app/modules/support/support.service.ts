@@ -1,4 +1,4 @@
-import { SupportStatus } from "@prisma/client";
+import { Prisma, SupportStatus } from "@prisma/client";
 import ApiError from "../../classes/ApiError.js";
 import {
   calculatePagination,
@@ -7,9 +7,9 @@ import {
 import prisma from "../../utils/prisma.js";
 import { TSendSupport } from "./support.validation.js";
 
-const send = async (payload: TSendSupport) =>
+const send = async (authId: string, payload: TSendSupport) =>
   prisma.support.create({
-    data: payload,
+    data: { authId, ...payload },
     select: {
       id: true,
       title: true,
@@ -19,9 +19,28 @@ const send = async (payload: TSendSupport) =>
     },
   });
 
-const getAll = async (options: TPaginationOptions) => {
+const getAll = async (options: TPaginationOptions, searchTerm?: string) => {
   const { page, take, skip } = calculatePagination(options);
-  const where = {};
+  const where: Prisma.SupportWhereInput = searchTerm
+    ? {
+        OR: [
+          { title: { contains: searchTerm, mode: "insensitive" } },
+          { description: { contains: searchTerm, mode: "insensitive" } },
+          {
+            auth: {
+              is: { name: { contains: searchTerm, mode: "insensitive" } },
+            },
+          },
+          {
+            auth: {
+              is: { email: { contains: searchTerm, mode: "insensitive" } },
+            },
+          },
+        ],
+      }
+    : {
+        status: { not: SupportStatus.RESOLVED },
+      };
   const [supports, total] = await Promise.all([
     prisma.support.findMany({
       where,
@@ -34,11 +53,28 @@ const getAll = async (options: TPaginationOptions) => {
         description: true,
         status: true,
         createdAt: true,
+        auth: { select: { id: true, name: true, email: true, status: true } },
       },
     }),
     prisma.support.count({ where }),
   ]);
   return { meta: { page, limit: take, total }, supports };
+};
+
+const getSingle = async (id: string) => {
+  const support = await prisma.support.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      status: true,
+      createdAt: true,
+      auth: { select: { id: true, name: true, email: true, status: true } },
+    },
+  });
+  if (!support) throw new ApiError(404, "Support request not found");
+  return support;
 };
 
 const updateStatus = async (id: string, status: SupportStatus) => {
@@ -60,4 +96,4 @@ const updateStatus = async (id: string, status: SupportStatus) => {
   });
 };
 
-export const supportServices = { send, getAll, updateStatus };
+export const supportServices = { send, getAll, getSingle, updateStatus };

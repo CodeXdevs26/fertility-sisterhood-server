@@ -34,6 +34,7 @@ model Auth {
   documents     Document[]
   photos        Photo[]
   subscription  Subscription?
+  supports      Support[]
 }
 
 model OTP {
@@ -234,6 +235,8 @@ model Legal {
 
 model Support {
   id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  authId      String?       @db.ObjectId
+  auth        Auth?         @relation(fields: [authId], references: [id])
   title       String
   description String
   status      SupportStatus @default(PENDING)
