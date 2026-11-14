@@ -1,3 +1,4 @@
+import { SubscriptionStatus } from "@prisma/client";
 import prisma from "../../utils/prisma.js";
 import { TProfileUpdate } from "./profile.validation.js";
 
@@ -14,10 +15,15 @@ const getProfile = async (authId: string) => {
       status: true,
       createdAt: true,
       updatedAt: true,
+      subscription: { select: { status: true } },
     },
   });
 
-  return profile;
+  const { subscription, ...rest } = profile;
+  return {
+    ...rest,
+    isPremiumUser: subscription?.status === SubscriptionStatus.ACTIVE,
+  };
 };
 
 const updateProfile = async (authId: string, payload: TProfileUpdate) => {
