@@ -8,9 +8,9 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "dev": "tsx watch src/server.ts",
-    "build": "tsc",
-    "start": "node dist/server.js",
+    "dev": "node init && tsx watch src/server.ts",
+    "build": "node init && tsc",
+    "start": "node init && node dist/server.js",
     "seed:admin": "tsx src/seedAdmin.ts"
   },
   "keywords": [],
