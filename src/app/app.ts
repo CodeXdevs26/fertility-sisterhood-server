@@ -2,6 +2,7 @@ import express, { Application, Request, Response } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import router from "./routes/index.js";
+import { swaggerRouter } from "./docs/swagger.js";
 import globalErrorHandler from "./middlewares/globalErrorHandler.js";
 import routeNotFoundHandler from "./middlewares/routeNotFoundHandler.js";
 
@@ -15,7 +16,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(
   cors({
-    origin: ["http://localhost:3000", "http://10.10.28.34:3000"],
+    origin: [
+      "http://localhost:3000",
+      "http://10.10.28.34:3000",
+      "http://72.244.153.29:3000",
+    ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
   })
@@ -29,6 +34,8 @@ app.get("/", (_req: Request, res: Response) => {
     message: "Fertility Sisterhood server is running! 🚀",
   });
 });
+
+app.use(swaggerRouter);
 
 app.use("/api/v1", router);
 
