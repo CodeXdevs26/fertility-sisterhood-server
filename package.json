@@ -8,9 +8,10 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "dev": "node init && tsx watch src/server.ts",
-    "build": "node init && tsc",
-    "start": "node init && node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "postinstall": "prisma generate",
+    "build": "prisma generate && tsc",
+    "start": "node dist/server.js",
     "seed:admin": "tsx src/seedAdmin.ts"
   },
   "keywords": [],
@@ -51,5 +52,9 @@
     "prisma": "6.19",
     "tsx": "^4.23.11",
     "typescript": "^6.0.3"
+  },
+  "overrides": {
+    "effect": "^3.22.1",
+    "deepmerge-ts": "^8.0.2"
   }
 }
