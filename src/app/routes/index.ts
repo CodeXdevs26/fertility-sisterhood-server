@@ -19,6 +19,7 @@ import { photoRoutes } from "../modules/photo/photo.routes.js";
 import { subscriptionRoutes } from "../modules/subscription/subscription.routes.js";
 import { metaRoutes } from "../modules/meta/meta.routes.js";
 import { cycleRoutes } from "../modules/cycle/cycle.routes.js";
+import { notificationRoutes } from "../modules/notification/notification.routes.js";
 
 const router = Router();
 
@@ -43,6 +44,7 @@ const routes = [
   { path: "/photos", route: photoRoutes },
   { path: "/subscriptions", route: subscriptionRoutes },
   { path: "/meta", route: metaRoutes },
+  { path: "/notifications", route: notificationRoutes },
 ];
 
 routes.forEach(route => {

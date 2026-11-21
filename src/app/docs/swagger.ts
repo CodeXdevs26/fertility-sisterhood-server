@@ -5,6 +5,7 @@ import { authSwagger } from "../modules/auth/auth.swagger.js";
 import { checklistSwagger } from "../modules/checklist/checklist.swagger.js";
 import { costSwagger } from "../modules/cost/cost.swagger.js";
 import { cycleSwagger } from "../modules/cycle/cycle.swagger.js";
+import { notificationSwagger } from "../modules/notification/notification.swagger.js";
 import { documentSwagger } from "../modules/document/document.swagger.js";
 import { journalSwagger } from "../modules/journal/journal.swagger.js";
 import { legalSwagger } from "../modules/legal/legal.swagger.js";
@@ -42,6 +43,7 @@ const modules = [
   photoSwagger,
   subscriptionSwagger,
   metaSwagger,
+  notificationSwagger,
 ];
 
 export const openApiDocument = {

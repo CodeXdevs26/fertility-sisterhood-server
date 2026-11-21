@@ -1,6 +1,7 @@
 import Stripe from "stripe";
-import { SubscriptionStatus } from "@prisma/client";
+import { NotificationModelType, SubscriptionStatus } from "@prisma/client";
 import ApiError from "../../classes/ApiError.js";
+import { notify } from "../notification/notification.utils.js";
 import config from "../../config/index.js";
 import prisma from "../../utils/prisma.js";
 import stripe from "../../utils/stripe.js";
@@ -228,15 +229,82 @@ const getCurrentPeriodEnd = (subscription: Stripe.Subscription) => {
   return periodEnd ? new Date(periodEnd * 1000) : null;
 };
 
+const FAILED_STATUSES: SubscriptionStatus[] = [
+  SubscriptionStatus.PAST_DUE,
+  SubscriptionStatus.UNPAID,
+];
+const ENDED_STATUSES: SubscriptionStatus[] = [
+  SubscriptionStatus.CANCELED,
+  SubscriptionStatus.INCOMPLETE_EXPIRED,
+];
+
+/** Push only on real status transitions (T1-T3), never on repeated webhooks. */
+const notifyStatusChange = (
+  subscription: { id: string; authId: string },
+  oldStatus: SubscriptionStatus,
+  newStatus: SubscriptionStatus,
+  currentPeriodEnd: Date | null
+) => {
+  if (oldStatus === newStatus) return;
+  const period = currentPeriodEnd?.toISOString() ?? "none";
+  const base = {
+    receiverId: subscription.authId,
+    modelType: NotificationModelType.SUBSCRIPTION,
+    referenceId: subscription.id,
+  };
+
+  if (newStatus === SubscriptionStatus.ACTIVE) {
+    notify({
+      ...base,
+      message: "Welcome to Premium!",
+      description: "All premium features are now unlocked.",
+      dedupeKey: `sub-active:${subscription.id}:${period}`,
+    });
+  } else if (
+    FAILED_STATUSES.includes(newStatus) &&
+    !FAILED_STATUSES.includes(oldStatus)
+  ) {
+    notify({
+      ...base,
+      message: "Payment failed",
+      description: "Please update your payment method to keep Premium.",
+      dedupeKey: `sub-failed:${subscription.id}:${period}`,
+    });
+  } else if (
+    ENDED_STATUSES.includes(newStatus) &&
+    !ENDED_STATUSES.includes(oldStatus) &&
+    // an unpaid checkout that expired was never premium - nothing "ended"
+    oldStatus !== SubscriptionStatus.INCOMPLETE
+  ) {
+    notify({
+      ...base,
+      message: "Your Premium has ended",
+      description: "Subscribe again anytime to unlock all features.",
+      dedupeKey: `sub-ended:${subscription.id}`,
+    });
+  }
+};
+
 const syncSubscription = async (subscription: Stripe.Subscription) => {
+  const existing = await prisma.subscription.findFirst({
+    where: { stripeSubscriptionId: subscription.id },
+    select: { id: true, authId: true, status: true },
+  });
+
+  const status = subscription.status.toUpperCase() as SubscriptionStatus;
+  const currentPeriodEnd = getCurrentPeriodEnd(subscription);
+
   await prisma.subscription.updateMany({
     where: { stripeSubscriptionId: subscription.id },
     data: {
-      status: subscription.status.toUpperCase() as SubscriptionStatus,
+      status,
       cancelAtPeriodEnd: subscription.cancel_at_period_end,
-      currentPeriodEnd: getCurrentPeriodEnd(subscription),
+      currentPeriodEnd,
     },
   });
+
+  if (existing)
+    notifyStatusChange(existing, existing.status, status, currentPeriodEnd);
 };
 
 const handleWebhook = async (payload: Buffer, signature: string) => {

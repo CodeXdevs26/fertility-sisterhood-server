@@ -10,10 +10,23 @@ export const userSignupZod = z.object({
 
 export type TSignup = z.infer<typeof userSignupZod>;
 
+const isValidTimezone = (timeZone: string) => {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export const loginZodSchema = z.object({
   email: emailZod,
   password: passwordZod,
-  fcmToken: z.string().optional(),
+  fcmToken: z.string().trim().min(1).optional(),
+  timezone: z
+    .string()
+    .refine(isValidTimezone, "timezone must be a valid IANA timezone!")
+    .optional(),
   isMobileApp: z.boolean().default(false),
 });
 

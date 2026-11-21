@@ -150,16 +150,26 @@ const login = async (payload: TLoginInput) => {
     }
   );
 
-  // update fcmToken if any
-  if (payload.fcmToken) {
-    await prisma.auth.update({
-      where: {
-        email: payload.email,
-      },
-      data: {
-        fcmToken: payload.fcmToken,
-      },
-    });
+  // save the device's fcmToken / timezone. A device token belongs to one
+  // account at a time, so remove it from whoever logged in on this device before.
+  if (payload.fcmToken || payload.timezone) {
+    await prisma.$transaction([
+      ...(payload.fcmToken
+        ? [
+            prisma.auth.updateMany({
+              where: { fcmToken: payload.fcmToken, id: { not: auth.id } },
+              data: { fcmToken: null },
+            }),
+          ]
+        : []),
+      prisma.auth.update({
+        where: { id: auth.id },
+        data: {
+          ...(payload.fcmToken ? { fcmToken: payload.fcmToken } : {}),
+          ...(payload.timezone ? { timezone: payload.timezone } : {}),
+        },
+      }),
+    ]);
   }
 
   return {
@@ -382,6 +392,8 @@ const changeAccountStatus = async (userId: string, status: UserStatus) => {
     },
     data: {
       status: status,
+      // blocked / deleted accounts must not receive pushes
+      ...(status !== UserStatus.ACTIVE ? { fcmToken: null } : {}),
     },
   });
 
@@ -425,7 +437,16 @@ const refreshToken = async (token: string) => {
   return { accessToken };
 };
 
+const logout = async (userId: string) => {
+  // stop push notifications to this device
+  await prisma.auth.updateMany({
+    where: { id: userId },
+    data: { fcmToken: null },
+  });
+};
+
 export const authServices = {
+  logout,
   signUp,
   login,
   getSingle,

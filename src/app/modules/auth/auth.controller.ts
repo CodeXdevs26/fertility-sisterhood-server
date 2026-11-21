@@ -102,7 +102,8 @@ const refreshToken = handleAsyncRequest(
   }
 );
 
-const logout = handleAsyncRequest(async (_req: Request, res: Response) => {
+const logout = handleAsyncRequest(async (req: TRequest, res: Response) => {
+  await authServices.logout(req.user!.id);
   res.clearCookie("player-centralRefreshToken", { httpOnly: true });
   sendResponse(res, {
     message: "Logged out successfully!",

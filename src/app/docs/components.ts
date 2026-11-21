@@ -70,6 +70,13 @@ export const ENUMS = {
     "CAMPING",
     "OTHER",
   ],
+  NotificationModelType: [
+    "SUBSCRIPTION",
+    "SUPPORT",
+    "APPOINTMENT",
+    "DIGEST",
+    "SYSTEM",
+  ],
 } as const;
 
 const enumSchemas = Object.fromEntries(
@@ -178,6 +185,32 @@ export const components = {
         moods: { type: "array", items: ref("Mood") },
         note: { type: "string", nullable: true },
         date,
+      },
+    },
+    Notification: {
+      type: "object",
+      properties: {
+        id,
+        message: { type: "string", example: "Appointment tomorrow" },
+        description: {
+          type: "string",
+          nullable: true,
+          example: "Dr. Smith at 10:30 AM",
+        },
+        modelType: ref("NotificationModelType"),
+        referenceId: {
+          ...id,
+          nullable: true,
+          description:
+            "Id of the related record (appointment, subscription, support) for deep-linking",
+        },
+        read: { type: "boolean", example: false },
+        pushed: {
+          type: "boolean",
+          example: true,
+          description: "Whether the FCM push was accepted",
+        },
+        createdAt: date,
       },
     },
     Cycle: {

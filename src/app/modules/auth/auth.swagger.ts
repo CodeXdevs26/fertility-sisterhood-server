@@ -64,7 +64,11 @@ export const authSwagger = {
               password,
               fcmToken: optStr(
                 "fcm-device-token",
-                "Push notification token (optional)"
+                "FCM device token for push notifications (optional). Removed from any other account that had it, and cleared again on logout."
+              ),
+              timezone: optStr(
+                "Asia/Dhaka",
+                "IANA timezone of the device (optional). Used to send reminders at the user's local 08:00 / 20:00. Defaults to UTC."
               ),
               isMobileApp: { type: "boolean", default: false },
             },
@@ -162,8 +166,9 @@ export const authSwagger = {
       post: op({
         tag,
         summary: "Logout",
-        description: "Clears the refresh token cookie.",
-        access: "admin",
+        description:
+          "Clears the refresh token cookie and the user's `fcmToken`, so this device stops receiving push notifications.",
+        access: "any",
         responses: ok("Logged out successfully!"),
       }),
     },
