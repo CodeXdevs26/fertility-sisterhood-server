@@ -153,11 +153,16 @@ model Cost {
 }
 
 model Cycle {
-  id     String   @id @default(auto()) @map("_id") @db.ObjectId
-  authId String   @db.ObjectId
-  auth   Auth     @relation(fields: [authId], references: [id])
-  date   DateTime
-  number Int
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  authId      String    @db.ObjectId
+  auth        Auth      @relation(fields: [authId], references: [id])
+  startDate   DateTime // UTC midnight of the first day
+  cyclePeriod Int? // length in days; null = ongoing
+  endDate     DateTime? // UTC midnight of the last day (inclusive); null = ongoing
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([authId, startDate])
 }
 
 model TestResult {

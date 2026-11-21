@@ -18,6 +18,7 @@ import { supportRoutes } from "../modules/support/support.routes.js";
 import { photoRoutes } from "../modules/photo/photo.routes.js";
 import { subscriptionRoutes } from "../modules/subscription/subscription.routes.js";
 import { metaRoutes } from "../modules/meta/meta.routes.js";
+import { cycleRoutes } from "../modules/cycle/cycle.routes.js";
 
 const router = Router();
 
@@ -27,6 +28,7 @@ const routes = [
   { path: "/otp", route: otpRoutes },
   { path: "/profile", route: profileRoutes },
   { path: "/symptoms", route: symptomRoutes },
+  { path: "/cycles", route: cycleRoutes },
   { path: "/appointments", route: appointmentRoutes },
   { path: "/medications", route: medicationRoutes },
   { path: "/supplements", route: supplementRoutes },

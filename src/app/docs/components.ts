@@ -180,6 +180,18 @@ export const components = {
         date,
       },
     },
+    Cycle: {
+      type: "object",
+      properties: {
+        id,
+        startDate: date,
+        cyclePeriod: { type: "integer", nullable: true, example: 10 },
+        endDate: { ...date, nullable: true },
+        cycleNumber: { type: "integer", example: 1 },
+        createdAt: date,
+        updatedAt: date,
+      },
+    },
     Appointment: {
       type: "object",
       properties: {
