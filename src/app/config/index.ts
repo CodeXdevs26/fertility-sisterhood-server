@@ -32,4 +32,11 @@ export default {
     publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
   },
+  firebase: {
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+  },
+  // Set to "false" on extra server instances so reminders are not sent twice
+  enableCron: process.env.ENABLE_CRON !== "false",
 };

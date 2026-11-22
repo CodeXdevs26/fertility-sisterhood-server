@@ -1,5 +1,5 @@
 import { crud } from "../../docs/crud.js";
-import { dateTime, obj, str } from "../../docs/fields.js";
+import { dateTime, obj, optStr, str } from "../../docs/fields.js";
 import { idParam, ok, op, ref } from "../../docs/helpers.js";
 
 const tag = "Medications";
@@ -11,7 +11,22 @@ const fields = {
   type: str("Injection"),
   startDate: dateTime(),
   endDate: dateTime(),
+  reminderTimes: {
+    type: "array",
+    minItems: 1,
+    maxItems: 10,
+    items: { type: "string", pattern: "^([01]\\d|2[0-3]):[0-5]\\d$" },
+    example: ["08:00", "20:00"],
+    description:
+      "Local reminder times (HH:mm, 24h) in `timezone`. A generic 'Medication reminder' push notification (without the medication name) is sent at each time.",
+  },
+  timezone: optStr(
+    "Europe/London",
+    "IANA timezone of the reminder times. Defaults to Europe/London."
+  ),
 };
+
+const requiredFields = Object.keys(fields).filter(key => key !== "timezone");
 
 export const medicationSwagger = {
   tag: { name: tag, description: "Medication plan and daily intake tracking" },
@@ -25,7 +40,7 @@ export const medicationSwagger = {
       listItem: "MedicationListItem",
       item: "Medication",
       hasSingle: true,
-      createBody: obj(fields, Object.keys(fields)),
+      createBody: obj(fields, requiredFields),
       updateBody: obj(fields),
       listDescription:
         "Each item includes `isTakenToday` (whether it was marked as taken today).",

@@ -85,6 +85,8 @@ model Medication {
   type                 String
   startDate            DateTime
   endDate              DateTime
+  reminderTimes        String[] // "HH:mm" (24h) in the medication's timezone
+  timezone             String                @default("Europe/London") // IANA timezone
   createdAt            DateTime              @default(now())
   medicationChecklists MedicationChecklist[]
 }

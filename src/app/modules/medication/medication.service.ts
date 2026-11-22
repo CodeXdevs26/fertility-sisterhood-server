@@ -10,19 +10,30 @@ import {
   TUpdateMedication,
 } from "./medication.validation.js";
 
+const medicationSelect = {
+  id: true,
+  name: true,
+  dose: true,
+  frequency: true,
+  type: true,
+  startDate: true,
+  endDate: true,
+  reminderTimes: true,
+  timezone: true,
+  createdAt: true,
+} as const;
+
+// Remove duplicate times and keep them in chronological order
+const normalizeReminderTimes = (times: string[]) => [...new Set(times)].sort();
+
 const create = async (authId: string, payload: TCreateMedication) =>
   prisma.medication.create({
-    data: { authId, ...payload },
-    select: {
-      id: true,
-      name: true,
-      dose: true,
-      frequency: true,
-      type: true,
-      startDate: true,
-      endDate: true,
-      createdAt: true,
+    data: {
+      authId,
+      ...payload,
+      reminderTimes: normalizeReminderTimes(payload.reminderTimes),
     },
+    select: medicationSelect,
   });
 
 const getMy = async (authId: string, options: TPaginationOptions) => {
@@ -40,6 +51,7 @@ const getMy = async (authId: string, options: TPaginationOptions) => {
         name: true,
         dose: true,
         frequency: true,
+        reminderTimes: true,
         medicationChecklists: {
           where: { date: today },
           select: { id: true },
@@ -81,16 +93,7 @@ const markTakenToday = async (authId: string, id: string) => {
 const getSingle = async (authId: string, id: string) => {
   const medication = await prisma.medication.findFirst({
     where: { id, authId },
-    select: {
-      id: true,
-      name: true,
-      dose: true,
-      frequency: true,
-      type: true,
-      startDate: true,
-      endDate: true,
-      createdAt: true,
-    },
+    select: medicationSelect,
   });
   if (!medication) throw new ApiError(404, "Medication not found");
   return medication;
@@ -109,17 +112,13 @@ const update = async (
 
   return prisma.medication.update({
     where: { id },
-    data: payload,
-    select: {
-      id: true,
-      name: true,
-      dose: true,
-      frequency: true,
-      type: true,
-      startDate: true,
-      endDate: true,
-      createdAt: true,
+    data: {
+      ...payload,
+      ...(payload.reminderTimes && {
+        reminderTimes: normalizeReminderTimes(payload.reminderTimes),
+      }),
     },
+    select: medicationSelect,
   });
 };
 
@@ -133,16 +132,7 @@ const remove = async (authId: string, id: string) => {
   await prisma.medicationChecklist.deleteMany({ where: { medicationId: id } });
   return prisma.medication.delete({
     where: { id },
-    select: {
-      id: true,
-      name: true,
-      dose: true,
-      frequency: true,
-      type: true,
-      startDate: true,
-      endDate: true,
-      createdAt: true,
-    },
+    select: medicationSelect,
   });
 };
 
