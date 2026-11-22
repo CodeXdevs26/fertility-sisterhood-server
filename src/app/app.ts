@@ -5,8 +5,15 @@ import router from "./routes/index.js";
 import { swaggerRouter } from "./docs/swagger.js";
 import globalErrorHandler from "./middlewares/globalErrorHandler.js";
 import routeNotFoundHandler from "./middlewares/routeNotFoundHandler.js";
+import requestLogger from "./middlewares/requestLogger.js";
 
 const app: Application = express();
+
+// behind a reverse proxy on the same machine (nginx), read the real client IP
+// from X-Forwarded-For; direct requests still use the socket address
+app.set("trust proxy", "loopback");
+
+app.use(requestLogger);
 
 app.use(
   "/api/v1/subscriptions/webhook",
@@ -16,11 +23,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(
   cors({
-    origin: [
-      "http://localhost:3000",
-      "http://10.10.28.34:3000",
-      "http://72.244.153.29:3000",
-    ],
+    // allow every origin; `true` reflects the request's Origin header,
+    // which (unlike "*") still works with credentials: true
+    origin: true,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
   })

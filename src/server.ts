@@ -1,5 +1,6 @@
 import { log } from "console";
 import { createServer, Server } from "http";
+import { networkInterfaces } from "os";
 import app from "./app/app.js";
 import config from "./app/config/index.js";
 import { startNotificationJobs } from "./app/jobs/notification.jobs.js";
@@ -10,7 +11,20 @@ const main = () => {
   server = createServer(app);
 
   server.listen(config.port, () => {
-    console.log(`Server running on port: ${config.port}`);
+    const networkIps = Object.values(networkInterfaces())
+      .flat()
+      .filter(net => net?.family === "IPv4" && !net.internal)
+      .map(net => net!.address);
+
+    console.log(
+      [
+        "",
+        `🚀 Fertility Sisterhood server is running (${config.env ?? "development"})`,
+        ...networkIps.map(ip => `   Network:  http://${ip}:${config.port}`),
+        `   Docs:     http://localhost:${config.port}/api-docs`,
+        "",
+      ].join("\n")
+    );
     startNotificationJobs();
   });
 };
