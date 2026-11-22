@@ -20,6 +20,7 @@ import { subscriptionRoutes } from "../modules/subscription/subscription.routes.
 import { metaRoutes } from "../modules/meta/meta.routes.js";
 import { cycleRoutes } from "../modules/cycle/cycle.routes.js";
 import { notificationRoutes } from "../modules/notification/notification.routes.js";
+import { exportRoutes } from "../modules/export/export.routes.js";
 
 const router = Router();
 
@@ -45,6 +46,7 @@ const routes = [
   { path: "/subscriptions", route: subscriptionRoutes },
   { path: "/meta", route: metaRoutes },
   { path: "/notifications", route: notificationRoutes },
+  { path: "/export", route: exportRoutes },
 ];
 
 routes.forEach(route => {

@@ -6,12 +6,13 @@ import { swaggerRouter } from "./docs/swagger.js";
 import globalErrorHandler from "./middlewares/globalErrorHandler.js";
 import routeNotFoundHandler from "./middlewares/routeNotFoundHandler.js";
 import requestLogger from "./middlewares/requestLogger.js";
+import config from "./config/index.js";
 
 const app: Application = express();
 
-// behind a reverse proxy on the same machine (nginx), read the real client IP
-// from X-Forwarded-For; direct requests still use the socket address
-app.set("trust proxy", "loopback");
+// read the real client IP from X-Forwarded-For when the request comes through
+// a trusted proxy (TRUST_PROXY, default "loopback"); others use the socket address
+app.set("trust proxy", config.trustProxy);
 
 app.use(requestLogger);
 

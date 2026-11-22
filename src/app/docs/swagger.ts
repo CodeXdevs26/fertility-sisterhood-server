@@ -21,6 +21,7 @@ import { supplementSwagger } from "../modules/supplement/supplement.swagger.js";
 import { supportSwagger } from "../modules/support/support.swagger.js";
 import { symptomSwagger } from "../modules/symptom/symptom.swagger.js";
 import { testResultSwagger } from "../modules/testResult/testResult.swagger.js";
+import { exportSwagger } from "../modules/export/export.swagger.js";
 
 const modules = [
   authSwagger,
@@ -44,6 +45,7 @@ const modules = [
   subscriptionSwagger,
   metaSwagger,
   notificationSwagger,
+  exportSwagger,
 ];
 
 export const openApiDocument = {
