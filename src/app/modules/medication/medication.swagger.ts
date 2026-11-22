@@ -11,7 +11,18 @@ const fields = {
   type: str("Injection"),
   startDate: dateTime(),
   endDate: dateTime(),
+  reminderTimes: {
+    type: "array",
+    maxItems: 12,
+    items: { type: "string", pattern: "^([01]\\d|2[0-3]):[0-5]\\d$" },
+    example: ["08:00", "20:00"],
+    description:
+      'Optional. Local times (HH:mm, 24h) in the user\'s timezone (saved at login). A push "Medication reminder" is sent at each time while the course is active (startDate..endDate). The push never contains the medication name (UK GDPR). Sending an empty array turns reminders off.',
+  },
 };
+
+// reminderTimes is optional on create
+const required = Object.keys(fields).filter(key => key !== "reminderTimes");
 
 export const medicationSwagger = {
   tag: { name: tag, description: "Medication plan and daily intake tracking" },
@@ -25,7 +36,7 @@ export const medicationSwagger = {
       listItem: "MedicationListItem",
       item: "Medication",
       hasSingle: true,
-      createBody: obj(fields, Object.keys(fields)),
+      createBody: obj(fields, required),
       updateBody: obj(fields),
       listDescription:
         "Each item includes `isTakenToday` (whether it was marked as taken today).",

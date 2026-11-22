@@ -76,6 +76,7 @@ export const ENUMS = {
     "SUPPORT",
     "APPOINTMENT",
     "DIGEST",
+    "MEDICATION",
     "SYSTEM",
   ],
 } as const;
@@ -203,7 +204,7 @@ export const components = {
           ...id,
           nullable: true,
           description:
-            "Id of the related record (appointment, subscription, support) for deep-linking",
+            "Id of the related record (appointment, medication, subscription, support) for deep-linking",
         },
         read: { type: "boolean", example: false },
         pushed: {
@@ -247,6 +248,13 @@ export const components = {
         type: { type: "string", example: "Injection" },
         startDate: date,
         endDate: date,
+        reminderTimes: {
+          type: "array",
+          items: { type: "string", example: "08:00" },
+          example: ["08:00", "20:00"],
+          description:
+            "Local times (HH:mm, 24h, user's timezone) for push reminders; sorted, no duplicates",
+        },
         createdAt: date,
       },
     },
@@ -259,6 +267,11 @@ export const components = {
         name: { type: "string" },
         dose: { type: "string" },
         frequency: { type: "string" },
+        reminderTimes: {
+          type: "array",
+          items: { type: "string" },
+          example: ["08:00", "20:00"],
+        },
         isTakenToday: { type: "boolean", example: false },
       },
     },

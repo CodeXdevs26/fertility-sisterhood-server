@@ -109,6 +109,7 @@ const sectionFetchers: Record<
       orderBy: { startDate: "asc" },
       select: {
         ...courseSelect,
+        reminderTimes: true,
         medicationChecklists: {
           where: inRange("date", range),
           orderBy: { date: "asc" },

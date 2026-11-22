@@ -80,6 +80,8 @@ Each feature lives in `src/app/modules/<name>/` and has five files:
   - 20:00: a reminder that the subscription is ending, sent only when `cancelAtPeriodEnd` is set.
 
   `dedupeKey` keeps each job idempotent. Call `runHourlyNotificationJob(now)` directly to trigger a run by hand.
+- `startMedicationReminderJob()` (`jobs/medication.jobs.ts`) runs every minute. It sends a push at each `Medication.reminderTimes` entry ("HH:mm" in the user's local time) while the course is active (`startDate..endDate`), and checks the previous minute too so a late tick is not missed. It is not premium-gated and not part of the daily push cap.
+  - **UK GDPR:** a medication push must never contain the medication name. The text is always "Medication reminder", and `referenceId` carries the medication id for deep-linking.
 - Tracker dates (appointments, checklists, medications, cycles) are stored as calendar days at **UTC midnight**. The jobs rely on this, so do not store local-time offsets in those fields.
 
 ### Email

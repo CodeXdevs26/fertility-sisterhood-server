@@ -4,6 +4,7 @@ import { networkInterfaces } from "os";
 import app from "./app/app.js";
 import config from "./app/config/index.js";
 import { startNotificationJobs } from "./app/jobs/notification.jobs.js";
+import { startMedicationReminderJob } from "./app/jobs/medication.jobs.js";
 
 let server: Server;
 
@@ -26,6 +27,7 @@ const main = () => {
       ].join("\n")
     );
     startNotificationJobs();
+    startMedicationReminderJob();
   });
 };
 
