@@ -138,7 +138,8 @@ export const authSwagger = {
       patch: op({
         tag,
         summary: "Activate, block or delete a user",
-        description: "Admin accounts cannot be changed (400).",
+        description:
+          "Admin accounts cannot be changed (400). The user gets an `ACCOUNT` notification (push + in-app) when the status actually changes to `BLOCKED` or `ACTIVE`. Blocking/deleting also clears the user's `fcmToken`.",
         access: "admin",
         parameters: [idParam("userId", "Id of the user to change")],
         requestBody: jsonBody(

@@ -237,6 +237,7 @@ model Notification {
 }
 
 enum NotificationModelType {
+  ACCOUNT
   SUBSCRIPTION
   SUPPORT
   APPOINTMENT

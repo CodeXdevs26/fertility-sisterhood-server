@@ -17,11 +17,11 @@ There is no test suite.
 
 ## Stack
 
-Express 5, TypeScript (ESM, `module: NodeNext`), Prisma 6 on MongoDB, Zod 4, JWT auth, Stripe subscriptions, AWS S3 uploads through multer memory storage, and email sent over HTTP to an external service (`SEND_EMAIL_URL`).
+Express 5, TypeScript (ESM, `module: NodeNext`), Prisma 6 on MongoDB, Zod 4, JWT auth, Stripe subscriptions, AWS S3 uploads through multer memory storage, Firebase Admin (FCM push), `node-cron` scheduled jobs, and email sent over HTTP to an external service (`SEND_EMAIL_URL`). `socket.io` is installed but not used anywhere yet.
 
 - **ESM imports must use the `.js` extension**, even from `.ts` files (`import x from "./foo.js"`).
 - The tsconfig is strict and also sets `noUncheckedIndexedAccess`, `noUnusedLocals`, and `noUnusedParameters`. Prefix unused parameters with `_`.
-- Config is read from env vars in `src/app/config/index.ts`. The AWS variables (`S3_BUCKET_ACCESS_KEY`, `S3_BUCKET_SECRET_ACCESS_KEY`, `S3_BASE_URL`, `AWS_REGION`, `AWS_BUCKET_NAME`) are missing from `.env.example`.
+- Config is read from env vars in `src/app/config/index.ts`. The AWS variables (`S3_BUCKET_ACCESS_KEY`, `S3_BUCKET_SECRET_ACCESS_KEY`, `S3_BASE_URL`, `S3_API`, `AWS_REGION`, `AWS_BUCKET_NAME`) are missing from `.env.example`. Of the Firebase variables, only `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL` and `FIREBASE_PRIVATE_KEY` are read; config converts the literal `\n` in the private key into real newlines.
 
 ## Architecture
 
@@ -59,6 +59,28 @@ Each feature lives in `src/app/modules/<name>/` and has five files:
   - Field builders are in `fields.ts`.
   - Component schemas and `ENUMS` are in `components.ts`.
 - **`ENUMS` in `components.ts` duplicates the Prisma enums by hand.** Update it whenever you change a schema enum or model, and also update the matching `*.swagger.ts` whenever routes change.
+
+### Notifications
+- To notify a user, call `createNotification` or `notify` in `modules/notification/notification.utils.ts`. Do not write to `prisma.notification` directly. These helpers save the in-app `Notification` row and then send an FCM push to `Auth.fcmToken`.
+  - `createNotification` is awaitable and returns `null` on a duplicate.
+  - `notify` is fire-and-forget: it never throws.
+- `dedupeKey` is a unique field. Pass a deterministic key, such as `appt:<id>`, to make a notification idempotent. A P2002 error on that key is swallowed.
+- Push rules:
+  - Pushes go only to `ACTIVE` accounts that have a token.
+  - `DIGEST` and `APPOINTMENT` types share a cap of 3 pushes per user per 24 hours.
+  - Invalid FCM tokens are cleared automatically.
+  - `push: false` creates the in-app notification without sending a push.
+- If the Firebase env vars are missing, `utils/firebase.ts` returns `null` and push is silently disabled. In-app notifications still work.
+- To add a notification type, add it to the `NotificationModelType` enum in Prisma and to `ENUMS` in `docs/components.ts`.
+
+### Scheduled jobs
+- `src/server.ts` calls `startNotificationJobs()` (`jobs/notification.jobs.ts`) once the server is listening. It runs an hourly cron (`0 * * * *`), but only for active `USER` accounts that have an `fcmToken`. For each of those users it computes the local hour from `Auth.timezone` (defaulting to UTC). All of these sends are for premium users only:
+  - 08:00: the morning digest.
+  - 20:00: appointment reminders.
+  - 20:00: a reminder that the subscription is ending, sent only when `cancelAtPeriodEnd` is set.
+
+  `dedupeKey` keeps each job idempotent. Call `runHourlyNotificationJob(now)` directly to trigger a run by hand.
+- Tracker dates (appointments, checklists, medications, cycles) are stored as calendar days at **UTC midnight**. The jobs rely on this, so do not store local-time offsets in those fields.
 
 ### Email
 - `utils/sendEmail.ts` fills the `{{placeholder}}` values in the HTML templates under `src/app/emailTemplates/` and POSTs the result to `SEND_EMAIL_URL`.

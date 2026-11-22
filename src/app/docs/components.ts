@@ -71,6 +71,7 @@ export const ENUMS = {
     "OTHER",
   ],
   NotificationModelType: [
+    "ACCOUNT",
     "SUBSCRIPTION",
     "SUPPORT",
     "APPOINTMENT",

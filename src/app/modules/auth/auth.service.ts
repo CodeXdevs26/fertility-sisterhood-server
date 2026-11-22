@@ -1,5 +1,6 @@
 import {
   LoginProvider,
+  NotificationModelType,
   OTPPurpose,
   Prisma,
   UserRole,
@@ -7,6 +8,10 @@ import {
 } from "@prisma/client";
 import crypto from "crypto";
 import ApiError from "../../classes/ApiError.js";
+import {
+  createNotification,
+  notify,
+} from "../notification/notification.utils.js";
 import prisma from "../../utils/prisma.js";
 import { sendEmail } from "../../utils/sendEmail.js";
 import {
@@ -386,6 +391,25 @@ const changeAccountStatus = async (userId: string, status: UserStatus) => {
   if (auth.role === UserRole.ADMIN)
     throw new ApiError(400, "Admin account cannot be changed!");
 
+  const isBlocking =
+    status === UserStatus.BLOCKED && auth.status !== UserStatus.BLOCKED;
+  const isActivating =
+    status === UserStatus.ACTIVE && auth.status !== UserStatus.ACTIVE;
+
+  // must be pushed BEFORE blocking: the update below clears the fcmToken
+  // and pushes only go to ACTIVE accounts
+  if (isBlocking) {
+    await createNotification({
+      receiverId: userId,
+      message: "Your account has been blocked",
+      description:
+        "You can no longer use Fertility Sisterhood. Please contact support if you think this is a mistake.",
+      modelType: NotificationModelType.ACCOUNT,
+    }).catch(error =>
+      console.error("Failed to send block notification:", error)
+    );
+  }
+
   await prisma.auth.update({
     where: {
       id: userId,
@@ -396,6 +420,15 @@ const changeAccountStatus = async (userId: string, status: UserStatus) => {
       ...(status !== UserStatus.ACTIVE ? { fcmToken: null } : {}),
     },
   });
+
+  if (isActivating) {
+    notify({
+      receiverId: userId,
+      message: "Your account has been activated",
+      description: "Welcome back! You can use Fertility Sisterhood again.",
+      modelType: NotificationModelType.ACCOUNT,
+    });
+  }
 
   const message =
     status === UserStatus.ACTIVE
