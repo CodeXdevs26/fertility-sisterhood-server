@@ -17,6 +17,43 @@ export const metaSwagger = {
             activeUsers: { type: "integer", example: 110 },
             blockedUsers: { type: "integer", example: 10 },
             activeSubscribers: { type: "integer", example: 45 },
+            newUsersThisMonth: {
+              type: "integer",
+              example: 85,
+              description: "ACTIVE/BLOCKED users created since the 1st (UTC)",
+            },
+            totalRevenue: {
+              type: "number",
+              example: 15230.5,
+              description: "EUR, succeeded payments minus refunds",
+            },
+            revenueThisMonth: { type: "number", example: 2040 },
+            pendingSupports: { type: "integer", example: 7 },
+          },
+        }),
+      }),
+    },
+    "/meta/earning-overview": {
+      get: op({
+        tag,
+        summary: "Revenue per month (EUR)",
+        description:
+          "Returns all 12 months (amount is 0 for empty months). Succeeded payments minus refunds, by payment date (UTC).",
+        access: "admin",
+        parameters: [
+          queryParam("year", "Year to report (default: current UTC year)", {
+            type: "integer",
+            example: 2026,
+          }),
+        ],
+        responses: ok("Earning overview fetched successfully!", {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              month: { type: "string", example: "Jan" },
+              amount: { type: "number", example: 1200 },
+            },
           },
         }),
       }),

@@ -25,7 +25,18 @@ const updateProfile = handleAsyncRequest(
   }
 );
 
+const updateConsent = handleAsyncRequest(
+  async (req: TRequest, res: Response) => {
+    const result = await profileServices.updateConsent(req.user!.id, req.body);
+    sendResponse(res, {
+      message: "Consent saved successfully!",
+      data: result,
+    });
+  }
+);
+
 export const profileController = {
   getProfile,
   updateProfile,
+  updateConsent,
 };

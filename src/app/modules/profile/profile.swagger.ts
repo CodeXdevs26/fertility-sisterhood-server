@@ -1,4 +1,6 @@
 import { obj, str } from "../../docs/fields.js";
+
+const bool = (example: boolean) => ({ type: "boolean", example });
 import { jsonBody, ok, op, ref } from "../../docs/helpers.js";
 
 const tag = "Profile";
@@ -22,6 +24,27 @@ export const profileSwagger = {
         access: "any",
         requestBody: jsonBody(obj({ name: str("Jane Doe") })),
         responses: ok("Profile updated successfully!", ref("Profile")),
+        errors: [404],
+      }),
+    },
+    "/profile/consent": {
+      patch: op({
+        tag,
+        summary: "Save or withdraw my consent",
+        description:
+          'Saves the "Your consent matters" choices. Send `healthData: false` to withdraw health-data consent. `healthDataUpdatedAt` changes only when `healthData` changes.',
+        access: "user",
+        requestBody: jsonBody(
+          obj(
+            {
+              healthData: bool(true),
+              marketing: bool(false),
+              cookies: bool(true),
+            },
+            ["healthData", "marketing", "cookies"]
+          )
+        ),
+        responses: ok("Consent saved successfully!", ref("Consent")),
         errors: [404],
       }),
     },

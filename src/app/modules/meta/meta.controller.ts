@@ -22,7 +22,20 @@ const getUserOverview = handleAsyncRequest(
   }
 );
 
+const getEarningOverview = handleAsyncRequest(
+  async (req: TRequest, res: Response) => {
+    const data = await metaServices.getEarningOverview(
+      pick(req.query, ["year"])
+    );
+    sendResponse(res, {
+      message: "Earning overview fetched successfully!",
+      data,
+    });
+  }
+);
+
 export const metaController = {
   getStats,
   getUserOverview,
+  getEarningOverview,
 };

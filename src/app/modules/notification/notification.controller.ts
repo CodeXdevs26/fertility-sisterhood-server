@@ -27,6 +27,14 @@ const markAllRead = handleAsyncRequest(async (req: TRequest, res: Response) => {
   sendResponse(res, { message: "All notifications marked as read!", data });
 });
 
+const markRead = handleAsyncRequest(async (req: TRequest, res: Response) => {
+  const data = await notificationServices.markRead(
+    req.user!.id,
+    req.params.id as string
+  );
+  sendResponse(res, { message: "Notification marked as read!", data });
+});
+
 const remove = handleAsyncRequest(async (req: TRequest, res: Response) => {
   const data = await notificationServices.remove(
     req.user!.id,
@@ -44,6 +52,7 @@ export const notificationController = {
   createDummy,
   getMy,
   markAllRead,
+  markRead,
   remove,
   clearAll,
 };

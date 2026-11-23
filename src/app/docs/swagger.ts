@@ -22,6 +22,10 @@ import { supportSwagger } from "../modules/support/support.swagger.js";
 import { symptomSwagger } from "../modules/symptom/symptom.swagger.js";
 import { testResultSwagger } from "../modules/testResult/testResult.swagger.js";
 import { exportSwagger } from "../modules/export/export.swagger.js";
+import { paymentSwagger } from "../modules/payment/payment.swagger.js";
+import { appSettingSwagger } from "../modules/appSetting/appSetting.swagger.js";
+import { quoteSwagger } from "../modules/quote/quote.swagger.js";
+import { checklistTemplateSwagger } from "../modules/checklistTemplate/checklistTemplate.swagger.js";
 
 const modules = [
   authSwagger,
@@ -46,6 +50,10 @@ const modules = [
   metaSwagger,
   notificationSwagger,
   exportSwagger,
+  paymentSwagger,
+  appSettingSwagger,
+  quoteSwagger,
+  checklistTemplateSwagger,
 ];
 
 export const openApiDocument = {

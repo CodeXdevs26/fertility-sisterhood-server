@@ -50,7 +50,7 @@ export const notificationSwagger = {
         tag,
         summary: "List my notifications",
         description:
-          "Newest first. `meta.unreadCount` is the unread badge count. Listing does not mark anything as read.",
+          "Newest first. `meta.unreadCount` is the unread badge count. Listing does not mark anything as read. Admins get only their own notifications (types NEW_USER, NEW_SUBSCRIPTION, SUBSCRIPTION_CANCELED, PAYMENT_FAILED, NEW_SUPPORT; in-app only, no push).",
         access: "any",
         parameters: pageParams,
         responses: ok(
@@ -71,6 +71,16 @@ export const notificationSwagger = {
         summary: "Mark all my notifications as read",
         access: "any",
         responses: ok("All notifications marked as read!", countData),
+      }),
+    },
+    "/notifications/{id}/read": {
+      patch: op({
+        tag,
+        summary: "Mark one notification as read",
+        access: "any",
+        parameters: [idParam()],
+        responses: ok("Notification marked as read!", ref("Notification")),
+        errors: [404],
       }),
     },
     "/notifications/{id}": {

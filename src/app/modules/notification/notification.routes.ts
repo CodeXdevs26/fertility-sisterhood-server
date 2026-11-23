@@ -14,6 +14,7 @@ router.post(
 );
 router.get("/", notificationController.getMy);
 router.patch("/read-all", notificationController.markAllRead);
+router.patch("/:id/read", notificationController.markRead);
 router.delete("/", notificationController.clearAll);
 router.delete("/:id", notificationController.remove);
 

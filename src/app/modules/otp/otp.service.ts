@@ -1,5 +1,6 @@
-import { OTPPurpose, UserStatus } from "@prisma/client";
+import { NotificationModelType, OTPPurpose, UserStatus } from "@prisma/client";
 import generateOTP from "../../utils/generateOTP.js";
+import { notifyAdmins } from "../notification/notification.utils.js";
 import prisma from "../../utils/prisma.js";
 import { sendEmail } from "../../utils/sendEmail.js";
 import ApiError from "../../classes/ApiError.js";
@@ -122,6 +123,14 @@ const verifyOtp = async (payload: TVerifyOtpInput) => {
         const name = updatedAuth.name || "there";
         const path = "./src/app/emailTemplates/verificationSuccess.html";
         sendEmail(updatedAuth.email, subject, path, { name });
+
+        notifyAdmins({
+          message: "New user",
+          description: `${updatedAuth.name} (${updatedAuth.email}) joined Fertility Sisterhood`,
+          modelType: NotificationModelType.NEW_USER,
+          referenceId: updatedAuth.id,
+          dedupeKey: `admin-new-user:${updatedAuth.id}`,
+        });
       }
 
       // prepare tokens

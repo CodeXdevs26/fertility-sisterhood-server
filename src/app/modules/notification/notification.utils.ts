@@ -1,4 +1,9 @@
-import { NotificationModelType, Prisma, UserStatus } from "@prisma/client";
+import {
+  NotificationModelType,
+  Prisma,
+  UserRole,
+  UserStatus,
+} from "@prisma/client";
 import prisma from "../../utils/prisma.js";
 import {
   getFirebaseMessaging,
@@ -144,4 +149,31 @@ export const notify = (input: TNotifyInput) => {
   createNotification(input).catch(error =>
     console.error("Failed to create notification:", error)
   );
+};
+
+/**
+ * Fire-and-forget in-app notification (no push) to every active admin.
+ * `dedupeKey` is suffixed with the admin id so each admin gets one copy.
+ */
+export const notifyAdmins = (
+  input: Omit<TNotifyInput, "receiverId" | "push">
+) => {
+  prisma.auth
+    .findMany({
+      where: { role: UserRole.ADMIN, status: UserStatus.ACTIVE },
+      select: { id: true },
+    })
+    .then(admins =>
+      admins.forEach(admin =>
+        notify({
+          ...input,
+          receiverId: admin.id,
+          push: false,
+          ...(input.dedupeKey
+            ? { dedupeKey: `${input.dedupeKey}:${admin.id}` }
+            : {}),
+        })
+      )
+    )
+    .catch(error => console.error("Failed to notify admins:", error));
 };

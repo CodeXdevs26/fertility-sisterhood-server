@@ -1,12 +1,6 @@
-import {
-  NotificationModelType,
-  Prisma,
-  SupportStatus,
-  UserRole,
-  UserStatus,
-} from "@prisma/client";
+import { NotificationModelType, Prisma, SupportStatus } from "@prisma/client";
 import ApiError from "../../classes/ApiError.js";
-import { notify } from "../notification/notification.utils.js";
+import { notify, notifyAdmins } from "../notification/notification.utils.js";
 import {
   calculatePagination,
   TPaginationOptions,
@@ -28,21 +22,15 @@ const send = async (authId: string, payload: TSendSupport) => {
 
   // T5: in-app only for admins (no push)
   prisma.auth
-    .findMany({
-      where: { role: UserRole.ADMIN, status: UserStatus.ACTIVE },
-      select: { id: true },
-    })
-    .then(admins =>
-      admins.forEach(admin =>
-        notify({
-          receiverId: admin.id,
-          message: "New support request",
-          description: support.title,
-          modelType: NotificationModelType.SUPPORT,
-          referenceId: support.id,
-          push: false,
-        })
-      )
+    .findUnique({ where: { id: authId }, select: { name: true } })
+    .then(sender =>
+      notifyAdmins({
+        message: "New support message",
+        description: `${sender?.name ?? "A user"} sent: "${support.title}"`,
+        modelType: NotificationModelType.NEW_SUPPORT,
+        referenceId: support.id,
+        dedupeKey: `admin-support:${support.id}`,
+      })
     )
     .catch(error => console.error("Failed to notify admins:", error));
 

@@ -61,6 +61,20 @@ const markAllRead = async (authId: string) => {
   return { count };
 };
 
+const markRead = async (authId: string, id: string) => {
+  const notification = await prisma.notification.findFirst({
+    where: { id, receiverId: authId },
+    select: { id: true },
+  });
+  if (!notification) throw new ApiError(404, "Notification not found!");
+
+  return prisma.notification.update({
+    where: { id },
+    data: { read: true },
+    select: notificationSelect,
+  });
+};
+
 const remove = async (authId: string, id: string) => {
   const notification = await prisma.notification.findFirst({
     where: { id, receiverId: authId },
@@ -85,6 +99,7 @@ export const notificationServices = {
   createDummy,
   getMy,
   markAllRead,
+  markRead,
   remove,
   clearAll,
 };

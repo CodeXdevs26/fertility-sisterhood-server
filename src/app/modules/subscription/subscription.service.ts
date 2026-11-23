@@ -1,7 +1,12 @@
 import Stripe from "stripe";
-import { NotificationModelType, SubscriptionStatus } from "@prisma/client";
+import {
+  NotificationModelType,
+  PaymentStatus,
+  SubscriptionStatus,
+} from "@prisma/client";
 import ApiError from "../../classes/ApiError.js";
-import { notify } from "../notification/notification.utils.js";
+import { notify, notifyAdmins } from "../notification/notification.utils.js";
+import { paymentServices } from "../payment/payment.service.js";
 import config from "../../config/index.js";
 import prisma from "../../utils/prisma.js";
 import stripe from "../../utils/stripe.js";
@@ -240,7 +245,7 @@ const ENDED_STATUSES: SubscriptionStatus[] = [
 
 /** Push only on real status transitions (T1-T3), never on repeated webhooks. */
 const notifyStatusChange = (
-  subscription: { id: string; authId: string },
+  subscription: { id: string; authId: string; stripeSubscriptionId: string },
   oldStatus: SubscriptionStatus,
   newStatus: SubscriptionStatus,
   currentPeriodEnd: Date | null
@@ -280,7 +285,74 @@ const notifyStatusChange = (
       ...base,
       message: "Your Premium has ended",
       description: "Subscribe again anytime to unlock all features.",
-      dedupeKey: `sub-ended:${subscription.id}`,
+      dedupeKey: `sub-ended:${subscription.stripeSubscriptionId}`,
+    });
+  }
+};
+
+const getUserLabel = async (authId: string) => {
+  const auth = await prisma.auth.findUnique({
+    where: { id: authId },
+    select: { name: true, email: true },
+  });
+  return auth ? `${auth.name} (${auth.email})` : "A user";
+};
+
+/** Admin in-app notifications for subscription changes (no push). */
+const notifyAdminsOfChange = async (
+  old: {
+    id: string;
+    authId: string;
+    status: SubscriptionStatus;
+    cancelAtPeriodEnd: boolean;
+  },
+  stripeSubscriptionId: string,
+  newStatus: SubscriptionStatus,
+  cancelAtPeriodEnd: boolean,
+  currentPeriodEnd: Date | null
+) => {
+  const period = currentPeriodEnd?.toISOString() ?? "none";
+  const base = { referenceId: old.authId };
+
+  if (
+    newStatus === SubscriptionStatus.ACTIVE &&
+    old.status !== SubscriptionStatus.ACTIVE &&
+    // recovering from a failed renewal is not a new subscription
+    !FAILED_STATUSES.includes(old.status)
+  ) {
+    notifyAdmins({
+      ...base,
+      message: "New subscription",
+      description: `${await getUserLabel(old.authId)} subscribed to Premium`,
+      modelType: NotificationModelType.NEW_SUBSCRIPTION,
+      dedupeKey: `admin-sub-new:${stripeSubscriptionId}`,
+    });
+  } else if (
+    ENDED_STATUSES.includes(newStatus) &&
+    !ENDED_STATUSES.includes(old.status) &&
+    old.status !== SubscriptionStatus.INCOMPLETE
+  ) {
+    notifyAdmins({
+      ...base,
+      message: "Subscription ended",
+      description: `Premium ended for ${await getUserLabel(old.authId)}`,
+      modelType: NotificationModelType.SUBSCRIPTION_CANCELED,
+      dedupeKey: `admin-sub-ended:${stripeSubscriptionId}`,
+    });
+  } else if (
+    cancelAtPeriodEnd &&
+    !old.cancelAtPeriodEnd &&
+    newStatus === SubscriptionStatus.ACTIVE
+  ) {
+    const endDate = currentPeriodEnd
+      ? ` (Premium ends ${currentPeriodEnd.toISOString().slice(0, 10)})`
+      : "";
+    notifyAdmins({
+      ...base,
+      message: "Subscription canceled",
+      description: `${await getUserLabel(old.authId)} canceled their subscription${endDate}`,
+      modelType: NotificationModelType.SUBSCRIPTION_CANCELED,
+      dedupeKey: `admin-sub-cancel:${stripeSubscriptionId}:${period}`,
     });
   }
 };
@@ -288,7 +360,7 @@ const notifyStatusChange = (
 const syncSubscription = async (subscription: Stripe.Subscription) => {
   const existing = await prisma.subscription.findFirst({
     where: { stripeSubscriptionId: subscription.id },
-    select: { id: true, authId: true, status: true },
+    select: { id: true, authId: true, status: true, cancelAtPeriodEnd: true },
   });
 
   const status = subscription.status.toUpperCase() as SubscriptionStatus;
@@ -303,8 +375,39 @@ const syncSubscription = async (subscription: Stripe.Subscription) => {
     },
   });
 
-  if (existing)
-    notifyStatusChange(existing, existing.status, status, currentPeriodEnd);
+  if (existing) {
+    notifyStatusChange(
+      { ...existing, stripeSubscriptionId: subscription.id },
+      existing.status,
+      status,
+      currentPeriodEnd
+    );
+    notifyAdminsOfChange(
+      existing,
+      subscription.id,
+      status,
+      subscription.cancel_at_period_end,
+      currentPeriodEnd
+    ).catch(error => console.error("Failed to notify admins:", error));
+  }
+};
+
+const handleInvoicePaymentFailed = async (invoice: Stripe.Invoice) => {
+  const payment = await paymentServices.recordInvoice(
+    invoice,
+    PaymentStatus.FAILED
+  );
+  // only renewals - a declined card at first checkout is not worth an alert
+  if (invoice.billing_reason !== "subscription_cycle" || !payment?.authId)
+    return;
+
+  notifyAdmins({
+    message: "Payment failed",
+    description: `Renewal payment failed for ${await getUserLabel(payment.authId)}`,
+    modelType: NotificationModelType.PAYMENT_FAILED,
+    referenceId: payment.id,
+    dedupeKey: `admin-payment-failed:${invoice.id}`,
+  });
 };
 
 const handleWebhook = async (payload: Buffer, signature: string) => {
@@ -330,6 +433,18 @@ const handleWebhook = async (payload: Buffer, signature: string) => {
       await syncSubscription(subscription);
       break;
     }
+    case "invoice.paid":
+      await paymentServices.recordInvoice(
+        event.data.object,
+        PaymentStatus.SUCCEEDED
+      );
+      break;
+    case "invoice.payment_failed":
+      await handleInvoicePaymentFailed(event.data.object);
+      break;
+    case "charge.refunded":
+      await paymentServices.recordRefund(event.data.object);
+      break;
     default:
       break;
   }

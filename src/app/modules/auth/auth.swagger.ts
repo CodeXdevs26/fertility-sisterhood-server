@@ -195,6 +195,11 @@ export const authSwagger = {
             enum: ["asc", "desc"],
           }),
           queryParam("role", "Comma separated roles, e.g. `USER`"),
+          queryParam(
+            "subscription",
+            "`premium` = subscription ACTIVE, `free` = no subscription or any other status. Omit for all.",
+            { type: "string", enum: ["premium", "free"] }
+          ),
         ],
         responses: ok(
           "Users retrieved successfully!",
@@ -214,6 +219,8 @@ export const authSwagger = {
             {
               type: "object",
               properties: {
+                provider: ref("LoginProvider"),
+                consent: ref("Consent"),
                 subscription: {
                   type: "object",
                   nullable: true,

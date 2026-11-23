@@ -13,7 +13,9 @@
     "build": "prisma generate && tsc",
     "start": "node dist/server.js",
     "seed:admin": "tsx src/seedAdmin.ts",
-    "seed:admin:prod": "node dist/seedAdmin.js"
+    "seed:admin:prod": "node dist/seedAdmin.js",
+    "seed:checklist": "tsx src/seedChecklistTemplates.ts",
+    "seed:checklist:prod": "node dist/seedChecklistTemplates.js"
   },
   "keywords": [],
   "author": "",

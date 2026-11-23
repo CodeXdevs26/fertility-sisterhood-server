@@ -78,7 +78,14 @@ export const ENUMS = {
     "DIGEST",
     "MEDICATION",
     "SYSTEM",
+    "NEW_USER",
+    "NEW_SUBSCRIPTION",
+    "SUBSCRIPTION_CANCELED",
+    "PAYMENT_FAILED",
+    "NEW_SUPPORT",
   ],
+  LoginProvider: ["FACEBOOK", "GOOGLE", "EMAIL"],
+  PaymentStatus: ["SUCCEEDED", "FAILED", "REFUNDED"],
 } as const;
 
 const enumSchemas = Object.fromEntries(
@@ -154,6 +161,96 @@ export const components = {
         role: ref("UserRole"),
         status: ref("UserStatus"),
         createdAt: date,
+        isPremium: {
+          type: "boolean",
+          example: false,
+          description: "Subscription status is ACTIVE",
+        },
+      },
+    },
+    Consent: {
+      type: "object",
+      nullable: true,
+      description:
+        '"Your consent matters" choices. `null` until the user answers.',
+      properties: {
+        healthData: {
+          type: "boolean",
+          example: true,
+          description: "Explicit consent to process health data (UK GDPR)",
+        },
+        healthDataUpdatedAt: {
+          ...date,
+          description: "When healthData was last given or withdrawn",
+        },
+        marketing: { type: "boolean", example: false },
+        cookies: { type: "boolean", example: true },
+      },
+    },
+    Payment: {
+      type: "object",
+      properties: {
+        id,
+        amount: { type: "number", example: 9.99 },
+        amountRefunded: { type: "number", example: 0 },
+        currency: { type: "string", example: "eur" },
+        status: ref("PaymentStatus"),
+        invoiceUrl: {
+          type: "string",
+          nullable: true,
+          example: "https://invoice.stripe.com/i/acct_123/test_abc",
+        },
+        createdAt: {
+          ...date,
+          description: "When the invoice was paid / created",
+        },
+        auth: {
+          type: "object",
+          nullable: true,
+          properties: {
+            id,
+            name: { type: "string", example: "Jane Doe" },
+            email: { type: "string", example: "jane@example.com" },
+          },
+        },
+      },
+    },
+    AppSetting: {
+      type: "object",
+      properties: {
+        supportEmail: { type: "string", example: "support@example.com" },
+        supportPhone: { type: "string", example: "+44 20 1234 5678" },
+        communityLink: {
+          type: "string",
+          example: "https://chat.whatsapp.com/abc123",
+        },
+        updatedAt: date,
+      },
+    },
+    Quote: {
+      type: "object",
+      properties: {
+        id,
+        text: {
+          type: "string",
+          example: "Believe in the power of your body.",
+        },
+        author: { type: "string", nullable: true, example: null },
+        isActive: { type: "boolean", example: true },
+        createdAt: date,
+      },
+    },
+    ChecklistTemplateItem: {
+      type: "object",
+      properties: {
+        id,
+        category: ref("ChecklistCategory"),
+        title: {
+          type: "string",
+          example: "Book initial fertility consultation",
+        },
+        order: { type: "integer", example: 1 },
+        createdAt: date,
       },
     },
     Profile: {
@@ -166,6 +263,8 @@ export const components = {
         status: ref("UserStatus"),
         createdAt: date,
         updatedAt: date,
+        provider: ref("LoginProvider"),
+        consent: ref("Consent"),
         isPremiumUser: { type: "boolean", example: false },
       },
     },

@@ -5,3 +5,11 @@ export const profileUpdateZod = z.object({
 });
 
 export type TProfileUpdate = z.infer<typeof profileUpdateZod>;
+
+export const updateConsentZod = z.object({
+  healthData: z.boolean(),
+  marketing: z.boolean(),
+  cookies: z.boolean(),
+});
+
+export type TUpdateConsent = z.infer<typeof updateConsentZod>;

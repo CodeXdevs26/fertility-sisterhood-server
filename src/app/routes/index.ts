@@ -21,6 +21,10 @@ import { metaRoutes } from "../modules/meta/meta.routes.js";
 import { cycleRoutes } from "../modules/cycle/cycle.routes.js";
 import { notificationRoutes } from "../modules/notification/notification.routes.js";
 import { exportRoutes } from "../modules/export/export.routes.js";
+import { paymentRoutes } from "../modules/payment/payment.routes.js";
+import { appSettingRoutes } from "../modules/appSetting/appSetting.routes.js";
+import { quoteRoutes } from "../modules/quote/quote.routes.js";
+import { checklistTemplateRoutes } from "../modules/checklistTemplate/checklistTemplate.routes.js";
 
 const router = Router();
 
@@ -47,6 +51,10 @@ const routes = [
   { path: "/meta", route: metaRoutes },
   { path: "/notifications", route: notificationRoutes },
   { path: "/export", route: exportRoutes },
+  { path: "/payments", route: paymentRoutes },
+  { path: "/app-settings", route: appSettingRoutes },
+  { path: "/quotes", route: quoteRoutes },
+  { path: "/checklist-templates", route: checklistTemplateRoutes },
 ];
 
 routes.forEach(route => {

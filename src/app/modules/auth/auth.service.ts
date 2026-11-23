@@ -3,6 +3,7 @@ import {
   NotificationModelType,
   OTPPurpose,
   Prisma,
+  SubscriptionStatus,
   UserRole,
   UserStatus,
 } from "@prisma/client";
@@ -232,11 +233,19 @@ const getAll = async (
     andConditions.push({ status });
   }
 
+  const activeSubscription: Prisma.AuthWhereInput = {
+    subscription: { is: { status: SubscriptionStatus.ACTIVE } },
+  };
+  const subscription = String(query.subscription || "").toLowerCase();
+  if (subscription === "premium") andConditions.push(activeSubscription);
+  else if (subscription === "free")
+    andConditions.push({ NOT: activeSubscription });
+
   const whereConditions: Prisma.AuthWhereInput =
     andConditions.length > 0 ? { AND: andConditions } : {};
 
   const { page, take, skip, sortBy, orderBy } = calculatePagination(options);
-  const auths = await prisma.auth.findMany({
+  const users = await prisma.auth.findMany({
     where: whereConditions,
     select: {
       id: true,
@@ -245,6 +254,7 @@ const getAll = async (
       role: true,
       status: true,
       createdAt: true,
+      subscription: { select: { status: true } },
     },
     skip,
     take,
@@ -254,6 +264,11 @@ const getAll = async (
   const total = await prisma.auth.count({
     where: whereConditions,
   });
+
+  const auths = users.map(({ subscription, ...user }) => ({
+    ...user,
+    isPremium: subscription?.status === SubscriptionStatus.ACTIVE,
+  }));
 
   const meta = {
     page,
@@ -274,6 +289,15 @@ const getSingle = async (id: string) => {
       name: true,
       role: true,
       status: true,
+      loginProvider: true,
+      consent: {
+        select: {
+          healthData: true,
+          healthDataUpdatedAt: true,
+          marketing: true,
+          cookies: true,
+        },
+      },
       createdAt: true,
       subscription: {
         select: {
@@ -287,7 +311,13 @@ const getSingle = async (id: string) => {
   });
   if (!auth) throw new ApiError(404, "User not found");
 
-  return auth;
+  const { loginProvider, consent, ...rest } = auth;
+  return {
+    ...rest,
+    isPremium: auth.subscription?.status === SubscriptionStatus.ACTIVE,
+    provider: loginProvider,
+    consent: consent ?? null,
+  };
 };
 
 const resetPassword = async (payload: TResetPasswordInput) => {
