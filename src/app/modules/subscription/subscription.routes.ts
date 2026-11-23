@@ -25,6 +25,7 @@ router.post(
   subscriptionController.purchase
 );
 router.get("/my", authorize(UserRole.USER), subscriptionController.getMy);
+router.post("/sync", authorize(UserRole.USER), subscriptionController.sync);
 router.patch(
   "/cancel",
   authorize(UserRole.USER),

@@ -524,7 +524,12 @@ export const components = {
         id,
         title: { type: "string", example: "Premium" },
         description: { type: "string" },
-        price: { type: "number", example: 9.99, description: "EUR per month" },
+        price: { type: "number", example: 9.99, description: "Per month" },
+        currency: {
+          type: "string",
+          example: "eur",
+          description: "ISO currency code of price (lowercase)",
+        },
         updatedAt: date,
       },
     },

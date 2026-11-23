@@ -34,6 +34,11 @@ const getMy = handleAsyncRequest(async (req: TRequest, res: Response) => {
   sendResponse(res, { message: "Subscription fetched successfully!", data });
 });
 
+const sync = handleAsyncRequest(async (req: TRequest, res: Response) => {
+  const data = await subscriptionServices.sync(req.user!.id);
+  sendResponse(res, { message: "Subscription synced successfully!", data });
+});
+
 const cancel = handleAsyncRequest(async (req: TRequest, res: Response) => {
   const data = await subscriptionServices.cancel(req.user!.id);
   sendResponse(res, { message: "Subscription canceled successfully!", data });
@@ -57,6 +62,7 @@ export const subscriptionController = {
   updatePlan,
   purchase,
   getMy,
+  sync,
   cancel,
   renew,
   webhook,

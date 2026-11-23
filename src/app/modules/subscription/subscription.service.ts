@@ -14,16 +14,28 @@ import { TUpdateSubscriptionPlan } from "./subscription.validation.js";
 
 const CURRENCY = "eur";
 
-const getPlan = async () =>
-  prisma.subscriptionPlan.findFirst({
-    select: {
-      id: true,
-      title: true,
-      description: true,
-      price: true,
-      updatedAt: true,
-    },
-  });
+const planSelect = {
+  id: true,
+  title: true,
+  description: true,
+  price: true,
+  updatedAt: true,
+};
+
+/** Statuses where the user already has (or is still paying for) a subscription. */
+const LIVE_STATUSES: SubscriptionStatus[] = [
+  SubscriptionStatus.ACTIVE,
+  SubscriptionStatus.TRIALING,
+  SubscriptionStatus.PAST_DUE,
+];
+
+const toStatus = (subscription: Stripe.Subscription) =>
+  subscription.status.toUpperCase() as SubscriptionStatus;
+
+const getPlan = async () => {
+  const plan = await prisma.subscriptionPlan.findFirst({ select: planSelect });
+  return plan ? { ...plan, currency: CURRENCY } : null;
+};
 
 const createMonthlyPrice = async (productId: string, price: number) => {
   const stripePrice = await stripe.prices.create({
@@ -38,13 +50,6 @@ const createMonthlyPrice = async (productId: string, price: number) => {
 
 const updatePlan = async (payload: TUpdateSubscriptionPlan) => {
   const existing = await prisma.subscriptionPlan.findFirst();
-  const select = {
-    id: true,
-    title: true,
-    description: true,
-    price: true,
-    updatedAt: true,
-  };
 
   if (!existing) {
     const product = await stripe.products.create({
@@ -53,14 +58,15 @@ const updatePlan = async (payload: TUpdateSubscriptionPlan) => {
     });
     const stripePrice = await createMonthlyPrice(product.id, payload.price);
 
-    return prisma.subscriptionPlan.create({
+    const created = await prisma.subscriptionPlan.create({
       data: {
         ...payload,
         stripeProductId: product.id,
         stripePriceId: stripePrice.id,
       },
-      select,
+      select: planSelect,
     });
+    return { ...created, currency: CURRENCY };
   }
 
   await stripe.products.update(existing.stripeProductId, {
@@ -78,11 +84,12 @@ const updatePlan = async (payload: TUpdateSubscriptionPlan) => {
     stripePriceId = stripePrice.id;
   }
 
-  return prisma.subscriptionPlan.update({
+  const updated = await prisma.subscriptionPlan.update({
     where: { id: existing.id },
     data: { ...payload, stripePriceId },
-    select,
+    select: planSelect,
   });
+  return { ...updated, currency: CURRENCY };
 };
 
 const purchase = async (authId: string) => {
@@ -92,23 +99,42 @@ const purchase = async (authId: string) => {
   if (!plan) throw new ApiError(404, "Subscription plan not found");
 
   const existing = await prisma.subscription.findUnique({ where: { authId } });
-  if (
-    existing &&
-    (
-      [
-        SubscriptionStatus.ACTIVE,
-        SubscriptionStatus.TRIALING,
-        SubscriptionStatus.PAST_DUE,
-      ] as SubscriptionStatus[]
-    ).includes(existing.status)
-  ) {
-    throw new ApiError(400, "You already have an active subscription");
-  }
 
-  if (existing?.status === SubscriptionStatus.INCOMPLETE) {
-    await stripe.subscriptions
-      .cancel(existing.stripeSubscriptionId)
+  if (existing) {
+    // Never trust the local status here: if the webhook was late or missing,
+    // a paid subscription still looks INCOMPLETE in the DB. Ask Stripe.
+    const current = await stripe.subscriptions
+      .retrieve(existing.stripeSubscriptionId, {
+        expand: ["latest_invoice.confirmation_secret"],
+      })
       .catch(() => null);
+
+    if (current) {
+      await syncSubscription(current);
+
+      if (LIVE_STATUSES.includes(toStatus(current))) {
+        throw new ApiError(400, "You already have an active subscription");
+      }
+
+      if (current.status === "incomplete") {
+        const invoice = current.latest_invoice as Stripe.Invoice | null;
+        const clientSecret = invoice?.confirmation_secret?.client_secret;
+        const samePrice =
+          current.items.data[0]?.price.id === plan.stripePriceId;
+
+        // still waiting for payment: hand back the same PaymentIntent
+        if (invoice?.status === "open" && clientSecret && samePrice) {
+          return purchaseResult(
+            current.id,
+            clientSecret,
+            existing.stripeCustomerId
+          );
+        }
+        await stripe.subscriptions.cancel(current.id).catch(() => null);
+      }
+    } else if (LIVE_STATUSES.includes(existing.status)) {
+      throw new ApiError(400, "You already have an active subscription");
+    }
   }
 
   let stripeCustomerId = existing?.stripeCustomerId;
@@ -136,15 +162,10 @@ const purchase = async (authId: string) => {
     metadata: { authId },
   });
 
-  const ephemeralKey = await stripe.ephemeralKeys.create(
-    { customer: stripeCustomerId },
-    { apiVersion: Stripe.API_VERSION }
-  );
-
   const data = {
     stripeCustomerId,
     stripeSubscriptionId: subscription.id,
-    status: subscription.status.toUpperCase() as SubscriptionStatus,
+    status: toStatus(subscription),
     cancelAtPeriodEnd: subscription.cancel_at_period_end,
     currentPeriodEnd: getCurrentPeriodEnd(subscription),
   };
@@ -156,26 +177,74 @@ const purchase = async (authId: string) => {
 
   const invoice = subscription.latest_invoice as Stripe.Invoice;
 
+  return purchaseResult(
+    subscription.id,
+    invoice.confirmation_secret?.client_secret,
+    stripeCustomerId
+  );
+};
+
+/** Values the Stripe PaymentSheet needs on the client. */
+const purchaseResult = async (
+  subscriptionId: string,
+  clientSecret: string | undefined,
+  customerId: string
+) => {
+  const ephemeralKey = await stripe.ephemeralKeys.create(
+    { customer: customerId },
+    { apiVersion: Stripe.API_VERSION }
+  );
   return {
-    subscriptionId: subscription.id,
-    clientSecret: invoice.confirmation_secret?.client_secret,
+    subscriptionId,
+    clientSecret,
     ephemeralKey: ephemeralKey.secret,
-    customerId: stripeCustomerId,
+    customerId,
     publishableKey: config.stripe.publishableKey,
   };
 };
 
-const getMy = async (authId: string) => {
-  const subscription = await prisma.subscription.findUnique({
+/** Pulls the latest state from Stripe into the DB. Returns false if there is nothing to sync. */
+const refreshFromStripe = async (authId: string) => {
+  const local = await prisma.subscription.findUnique({
     where: { authId },
-    select: {
-      status: true,
-      cancelAtPeriodEnd: true,
-      currentPeriodEnd: true,
-      createdAt: true,
-    },
+    select: { stripeSubscriptionId: true },
+  });
+  if (!local) return false;
+  await syncSubscriptionById(local.stripeSubscriptionId);
+  return true;
+};
+
+/** POST /subscriptions/sync - for the app right after the PaymentSheet closes. */
+const sync = async (authId: string) => {
+  if (!(await refreshFromStripe(authId)))
+    throw new ApiError(404, "No subscription found");
+  return getMy(authId);
+};
+
+const getMy = async (authId: string) => {
+  const select = {
+    status: true,
+    cancelAtPeriodEnd: true,
+    currentPeriodEnd: true,
+    createdAt: true,
+  };
+  let subscription = await prisma.subscription.findUnique({
+    where: { authId },
+    select,
   });
   if (!subscription) return null;
+
+  // waiting for payment: don't depend on the webhook, ask Stripe directly
+  if (subscription.status === SubscriptionStatus.INCOMPLETE) {
+    try {
+      await refreshFromStripe(authId);
+      subscription =
+        (await prisma.subscription.findUnique({ where: { authId }, select })) ??
+        subscription;
+    } catch (error) {
+      console.error("Stripe refresh failed:", error);
+    }
+  }
 
   return {
     status: subscription.status,
@@ -392,6 +461,19 @@ const syncSubscription = async (subscription: Stripe.Subscription) => {
   }
 };
 
+const syncSubscriptionById = async (stripeSubscriptionId: string) => {
+  const subscription =
+    await stripe.subscriptions.retrieve(stripeSubscriptionId);
+  await syncSubscription(subscription);
+};
+
+/** Invoice events also refresh the subscription, so status never lags the payment. */
+const syncInvoiceSubscription = async (invoice: Stripe.Invoice) => {
+  const ref = invoice.parent?.subscription_details?.subscription;
+  const id = typeof ref === "string" ? ref : ref?.id;
+  if (id) await syncSubscriptionById(id);
+};
+
 const handleInvoicePaymentFailed = async (invoice: Stripe.Invoice) => {
   const payment = await paymentServices.recordInvoice(
     invoice,
@@ -425,22 +507,21 @@ const handleWebhook = async (payload: Buffer, signature: string) => {
   switch (event.type) {
     case "customer.subscription.created":
     case "customer.subscription.updated":
-    case "customer.subscription.deleted": {
+    case "customer.subscription.deleted":
       // Retrieve the latest state since webhook events can arrive out of order
-      const subscription = await stripe.subscriptions.retrieve(
-        event.data.object.id
-      );
-      await syncSubscription(subscription);
+      await syncSubscriptionById(event.data.object.id);
       break;
-    }
     case "invoice.paid":
+    case "invoice.payment_succeeded":
       await paymentServices.recordInvoice(
         event.data.object,
         PaymentStatus.SUCCEEDED
       );
+      await syncInvoiceSubscription(event.data.object);
       break;
     case "invoice.payment_failed":
       await handleInvoicePaymentFailed(event.data.object);
+      await syncInvoiceSubscription(event.data.object);
       break;
     case "charge.refunded":
       await paymentServices.recordRefund(event.data.object);
@@ -455,6 +536,7 @@ export const subscriptionServices = {
   updatePlan,
   purchase,
   getMy,
+  sync,
   cancel,
   renew,
   handleWebhook,
