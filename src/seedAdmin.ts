@@ -28,6 +28,9 @@ const seedAdmin = async () => {
     console.log("Admin created");
   } catch (error) {
     console.log(error);
+    process.exitCode = 1;
+  } finally {
+    await prisma.$disconnect();
   }
 };
 

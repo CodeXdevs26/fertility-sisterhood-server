@@ -215,7 +215,7 @@ let isRunning = false;
 
 /** Runs at minute 0 of every hour; each user is handled at their local 08:00 / 20:00. */
 export const startNotificationJobs = () => {
-  cron.schedule("0 * * * *", async () => {
+  return cron.schedule("0 * * * *", async () => {
     if (isRunning) return;
     isRunning = true;
     try {

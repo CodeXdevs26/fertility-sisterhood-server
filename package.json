@@ -12,7 +12,8 @@
     "postinstall": "prisma generate",
     "build": "prisma generate && tsc",
     "start": "node dist/server.js",
-    "seed:admin": "tsx src/seedAdmin.ts"
+    "seed:admin": "tsx src/seedAdmin.ts",
+    "seed:admin:prod": "node dist/seedAdmin.js"
   },
   "keywords": [],
   "author": "",

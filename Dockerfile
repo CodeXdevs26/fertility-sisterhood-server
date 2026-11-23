@@ -28,7 +28,10 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends openssl \
   && rm -rf /var/lib/apt/lists/*
 
+# NOTE: `docker run --env-file .env` overrides this with the NODE_ENV in .env;
+# docker compose re-sets it to production explicitly
 ENV NODE_ENV=production
+ENV PORT=5003
 
 COPY --from=build --chown=node:node /app/package.json ./package.json
 COPY --from=build --chown=node:node /app/node_modules ./node_modules

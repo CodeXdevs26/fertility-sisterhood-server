@@ -104,7 +104,7 @@ let isRunning = false;
 
 /** Runs every minute; each reminder fires at the user's local "HH:mm". */
 export const startMedicationReminderJob = () => {
-  cron.schedule("* * * * *", async () => {
+  return cron.schedule("* * * * *", async () => {
     if (isRunning) return;
     isRunning = true;
     try {
