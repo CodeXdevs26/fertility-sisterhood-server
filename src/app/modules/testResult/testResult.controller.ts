@@ -4,7 +4,7 @@ import handleAsyncRequest from "../../utils/handleAsyncRequest.js";
 import pick from "../../utils/pick.js";
 import { sendResponse } from "../../utils/sendResponse.js";
 import { testResultServices } from "./testResult.service.js";
-import { testResultQueryZod } from "./testResult.validation.js";
+import { TTestResultQuery } from "./testResult.validation.js";
 
 const create = handleAsyncRequest(async (req: TRequest, res: Response) => {
   const data = await testResultServices.create(req.user!.id, req.body);
@@ -15,7 +15,7 @@ const create = handleAsyncRequest(async (req: TRequest, res: Response) => {
   });
 });
 const getMy = handleAsyncRequest(async (req: TRequest, res: Response) => {
-  const { category } = testResultQueryZod.parse(req.query);
+  const { category } = req.query as TTestResultQuery;
   const data = await testResultServices.getMy(
     req.user!.id,
     pick(req.query, ["page", "limit"]),

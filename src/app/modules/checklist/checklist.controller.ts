@@ -1,11 +1,10 @@
 import { Response } from "express";
-import { ChecklistCategory } from "@prisma/client";
 import { TRequest } from "../../interface/global.interface.js";
 import handleAsyncRequest from "../../utils/handleAsyncRequest.js";
 import pick from "../../utils/pick.js";
 import { sendResponse } from "../../utils/sendResponse.js";
 import { checklistServices } from "./checklist.service.js";
-import { checklistQueryZod } from "./checklist.validation.js";
+import { TChecklistQuery } from "./checklist.validation.js";
 
 const create = handleAsyncRequest(async (req: TRequest, res: Response) => {
   const data = await checklistServices.create(req.user!.id, req.body);
@@ -17,11 +16,11 @@ const create = handleAsyncRequest(async (req: TRequest, res: Response) => {
 });
 
 const getToday = handleAsyncRequest(async (req: TRequest, res: Response) => {
-  const { category } = checklistQueryZod.parse(req.query);
+  const { category } = req.query as TChecklistQuery;
   const data = await checklistServices.getToday(
     req.user!.id,
     pick(req.query, ["page", "limit"]),
-    category as ChecklistCategory | undefined
+    category
   );
   sendResponse(res, {
     message: "Today's checklist fetched successfully!",

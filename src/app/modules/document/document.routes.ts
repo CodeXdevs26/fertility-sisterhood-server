@@ -5,7 +5,11 @@ import requirePremium from "../../middlewares/requirePremium.js";
 import validate from "../../middlewares/validate.js";
 import { upload } from "../../utils/awss3.js";
 import { documentController } from "./document.controller.js";
-import { createDocumentZod, updateDocumentZod } from "./document.validation.js";
+import {
+  createDocumentZod,
+  documentQueryZod,
+  updateDocumentZod,
+} from "./document.validation.js";
 
 const router = Router();
 router.use(authorize(UserRole.USER), requirePremium);
@@ -15,7 +19,11 @@ router.post(
   validate(createDocumentZod),
   documentController.create
 );
-router.get("/", documentController.getMy);
+router.get(
+  "/",
+  validate(documentQueryZod, { query: true }),
+  documentController.getMy
+);
 router.patch(
   "/:id",
   upload.single("file"),

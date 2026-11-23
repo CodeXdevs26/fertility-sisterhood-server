@@ -1,15 +1,17 @@
-import { PhotoMilestone } from "@prisma/client";
 import { Response } from "express";
 import { TRequest } from "../../interface/global.interface.js";
 import handleAsyncRequest from "../../utils/handleAsyncRequest.js";
 import pick from "../../utils/pick.js";
 import { sendResponse } from "../../utils/sendResponse.js";
 import { photoServices } from "./photo.service.js";
-import { createPhotoZod, photoQueryZod } from "./photo.validation.js";
+import { TCreatePhoto, TPhotoQuery } from "./photo.validation.js";
 
 const create = handleAsyncRequest(async (req: TRequest, res: Response) => {
-  const payload = createPhotoZod.parse(req.body);
-  const data = await photoServices.create(req.user!.id, payload, req.file);
+  const data = await photoServices.create(
+    req.user!.id,
+    req.body as TCreatePhoto,
+    req.file
+  );
   sendResponse(res, {
     status: 201,
     message: "Photo added successfully!",
@@ -18,11 +20,11 @@ const create = handleAsyncRequest(async (req: TRequest, res: Response) => {
 });
 
 const getMy = handleAsyncRequest(async (req: TRequest, res: Response) => {
-  const { category } = photoQueryZod.parse(req.query);
+  const { category } = req.query as TPhotoQuery;
   const data = await photoServices.getMy(
     req.user!.id,
     pick(req.query, ["page", "limit"]),
-    category as PhotoMilestone | undefined
+    category
   );
   sendResponse(res, { message: "Photos fetched successfully!", data });
 });

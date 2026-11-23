@@ -3,7 +3,7 @@ import { TRequest } from "../../interface/global.interface.js";
 import handleAsyncRequest from "../../utils/handleAsyncRequest.js";
 import { sendResponse } from "../../utils/sendResponse.js";
 import { cycleServices } from "./cycle.service.js";
-import { cycleMonthQueryZod } from "./cycle.validation.js";
+import { TCycleMonthQuery } from "./cycle.validation.js";
 
 const create = handleAsyncRequest(async (req: TRequest, res: Response) => {
   const data = await cycleServices.create(req.user!.id, req.body);
@@ -20,7 +20,7 @@ const getMy = handleAsyncRequest(async (req: TRequest, res: Response) => {
 });
 
 const getByDate = handleAsyncRequest(async (req: TRequest, res: Response) => {
-  const { date } = cycleMonthQueryZod.parse(req.query);
+  const { date } = req.query as TCycleMonthQuery;
   const data = await cycleServices.getByDate(req.user!.id, date);
   sendResponse(res, { message: "Cycle days fetched successfully!", data });
 });

@@ -38,7 +38,11 @@ Each feature lives in `src/app/modules/<name>/` and has five files:
 ### Middleware
 - `authorize(...roles)` in `middlewares/authorize.ts` reads a Bearer JWT and sets `req.user = { id, email, role }`. Use `authorize({ optional: true }, ...roles)` for optional auth. Handlers type `req` as `TRequest` from `interface/global.interface.ts`.
 - `requirePremium` lets the request through only when the user's `Subscription.status === ACTIVE`. Most user-data modules apply `router.use(authorize(UserRole.USER), requirePremium)`.
-- `validate(schema)` **only validates `req.body`. It does not replace it**, so Zod defaults and coercions such as `z.coerce.date()` and `.default([])` do not reach the service. The exception is `validate(schema, { formData: true })`: it parses `req.body.payload` as a JSON string and **does** replace `req.body`. Use that form for multipart routes.
+- Zod runs only in routes through `validate(...)`, never in controllers.
+  - `validate(schema)` **only validates `req.body`. It does not replace it**, so Zod defaults and coercions such as `z.coerce.date()` and `.default([])` do not reach the service.
+  - `validate(schema, { replace: true })` validates `req.body` and **replaces** it with the parsed result. Use it when the controller needs the coerced values, e.g. flat multipart fields (photos).
+  - `validate(schema, { formData: true })` parses `req.body.payload` as a JSON string and replaces `req.body`. Validation is skipped when `payload` is missing.
+  - `validate(schema, { query: true })` validates `req.query` and puts the parsed values back on `req.query`. Keys outside the schema, such as `page` and `limit`, are kept. The controller reads it as `req.query as T<X>Query`.
 - File uploads use `upload` / `uploadImage` (images only: jpeg/png/webp, max 5MB) together with `uploadToS3` / `deleteFromS3`, all in `utils/awss3.ts`.
 
 ### Errors and responses

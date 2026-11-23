@@ -19,3 +19,4 @@ export const checklistQueryZod = z.object({
 });
 export type TCreateChecklist = z.infer<typeof createChecklistZod>;
 export type TUpdateChecklist = z.infer<typeof updateChecklistZod>;
+export type TChecklistQuery = z.infer<typeof checklistQueryZod>;

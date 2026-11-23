@@ -34,3 +34,4 @@ export const cycleMonthQueryZod = z.object({
     .regex(/^\d{4}-(0[1-9]|1[0-2])$/, "date must be in YYYY-MM format!")
     .optional(),
 });
+export type TCycleMonthQuery = z.infer<typeof cycleMonthQueryZod>;

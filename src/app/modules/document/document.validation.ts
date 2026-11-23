@@ -13,3 +13,4 @@ export const documentQueryZod = z.object({
 
 export type TCreateDocument = z.infer<typeof createDocumentZod>;
 export type TUpdateDocument = z.infer<typeof updateDocumentZod>;
+export type TDocumentQuery = z.infer<typeof documentQueryZod>;
