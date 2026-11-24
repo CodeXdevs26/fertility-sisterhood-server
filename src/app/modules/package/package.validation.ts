@@ -28,6 +28,8 @@ export const updatePackageZod = z.object({
   description: description.optional(),
   price: z.number().positive().optional(),
   currency: currency.optional(),
+  /** false restores a soft-deleted package */
+  isDeleted: z.literal(false).optional(),
 });
 
 export type TCreatePackage = z.infer<typeof createPackageZod>;

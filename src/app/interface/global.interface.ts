@@ -6,6 +6,8 @@ export type TAuthUser = {
   id: string;
   email: string;
   role: UserRole;
+  /** token version at issue time; must match Auth.tokenVersion */
+  tv?: number;
 };
 
 export type TRequest = Request & {

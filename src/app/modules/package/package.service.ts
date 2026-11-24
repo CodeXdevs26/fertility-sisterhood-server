@@ -48,7 +48,15 @@ const ensureLive = async (id: string) => {
 };
 
 const update = async (id: string, payload: TUpdatePackage) => {
-  await ensureLive(id);
+  // a deleted package can be edited only to restore it (`isDeleted: false`);
+  // its product id is unique, so it could not be re-created otherwise
+  const pkg = await prisma.package.findUnique({
+    where: { id },
+    select: { isDeleted: true },
+  });
+  if (!pkg || (pkg.isDeleted && payload.isDeleted !== false)) {
+    throw new ApiError(404, "Package not found");
+  }
   return prisma.package.update({
     where: { id },
     data: payload,

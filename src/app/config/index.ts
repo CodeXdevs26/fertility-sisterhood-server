@@ -34,6 +34,11 @@ export default {
     apiKey: process.env.REVENUECAT_API_KEY,
     // value RevenueCat sends in the webhook Authorization header
     webhookSecret: process.env.REVENUECAT_WEBHOOK_SECRET,
+    // POST /subscriptions/test-purchase grants free Premium: opt-in only, and
+    // never in production (a missing NODE_ENV must not enable it)
+    enableTestPurchase:
+      process.env.ENABLE_TEST_PURCHASE === "true" &&
+      process.env.NODE_ENV !== "production",
   },
   firebase: {
     projectId: process.env.FIREBASE_PROJECT_ID,

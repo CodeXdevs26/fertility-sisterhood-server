@@ -1,6 +1,6 @@
 import ApiError from "../../classes/ApiError.js";
 import { TFile } from "../../interface/file.interface.js";
-import { deleteFromS3, uploadToS3 } from "../../utils/awss3.js";
+import { safeDeleteFromS3, uploadToS3 } from "../../utils/awss3.js";
 import {
   calculatePagination,
   TPaginationOptions,
@@ -12,25 +12,30 @@ import { PhotoMilestone } from "@prisma/client";
 const create = async (authId: string, payload: TCreatePhoto, file?: TFile) => {
   if (!file) throw new ApiError(400, "Photo file is required");
   const fileUrl = await uploadToS3(file);
-  return prisma.photo.create({
-    data: {
-      authId,
-      caption: payload.caption,
-      milestone: payload.milestone,
-      date: payload.date,
-      file: fileUrl,
-      fileSize: file.size,
-    },
-    select: {
-      id: true,
-      authId: true,
-      caption: true,
-      milestone: true,
-      date: true,
-      file: true,
-      fileSize: true,
-    },
-  });
+  return prisma.photo
+    .create({
+      data: {
+        authId,
+        caption: payload.caption,
+        milestone: payload.milestone,
+        date: payload.date,
+        file: fileUrl,
+        fileSize: file.size,
+      },
+      select: {
+        id: true,
+        authId: true,
+        caption: true,
+        milestone: true,
+        date: true,
+        file: true,
+        fileSize: true,
+      },
+    })
+    .catch(async error => {
+      await safeDeleteFromS3(fileUrl); // don't orphan the upload
+      throw error;
+    });
 };
 
 const getMy = async (
@@ -46,7 +51,14 @@ const getMy = async (
       skip,
       take,
       orderBy: { date: "desc" },
-      select: { caption: true, fileSize: true, file: true, date: true },
+      select: {
+        id: true,
+        caption: true,
+        milestone: true,
+        fileSize: true,
+        file: true,
+        date: true,
+      },
     }),
     prisma.photo.count({ where }),
   ]);
@@ -84,8 +96,10 @@ const remove = async (authId: string, id: string) => {
   });
   if (!photo) throw new ApiError(404, "Photo not found");
 
-  await deleteFromS3(photo.file);
+  // DB first: a failed S3 delete must not leave a record pointing at a
+  // missing file, nor make the photo undeletable
   await prisma.photo.delete({ where: { id } });
+  await safeDeleteFromS3(photo.file);
 
   return {
     id: photo.id,

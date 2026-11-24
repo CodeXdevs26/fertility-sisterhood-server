@@ -22,9 +22,30 @@ export const profileSwagger = {
         tag,
         summary: "Update my profile",
         access: "any",
-        requestBody: jsonBody(obj({ name: str("Jane Doe") })),
+        requestBody: jsonBody(
+          obj({
+            name: str("Jane Doe"),
+            fcmToken: str(
+              "fcm-device-token",
+              "Current device push token (send it whenever it rotates)"
+            ),
+            timezone: str("Europe/London", "IANA timezone"),
+          })
+        ),
         responses: ok("Profile updated successfully!", ref("Profile")),
         errors: [404],
+      }),
+      delete: op({
+        tag,
+        summary: "Delete my account permanently",
+        description:
+          "UK GDPR right to erasure. Confirms with the password, then permanently deletes the account and all its data: trackers, uploaded documents and photos (also from S3), notifications, support requests and the subscription record. Payment records are kept for accounting but no longer linked to the user. The refresh cookie is cleared. **A store subscription is not cancelled**: the user must cancel it in the App Store / Play Store first. Admin accounts cannot be deleted.",
+        access: "user",
+        requestBody: jsonBody(
+          obj({ password: str("Secret@123", "Current password") }, ["password"])
+        ),
+        responses: ok("Account deleted successfully!"),
+        errors: [400, 404, 429],
       }),
     },
     "/profile/consent": {

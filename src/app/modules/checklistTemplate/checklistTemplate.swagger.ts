@@ -75,7 +75,8 @@ export const checklistTemplateSwagger = {
       delete: op({
         tag,
         summary: "Delete template item",
-        description: "Deletes the template only; users keep their own copies.",
+        description:
+          "Deletes the template only; users who already opened their checklist keep their own copies.",
         access: "admin",
         parameters: [idParam()],
         responses: ok(

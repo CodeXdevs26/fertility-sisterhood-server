@@ -65,7 +65,11 @@ const notifyStatusChange = (
     referenceId: subscriptionId,
   };
 
-  if (newStatus === SubscriptionStatus.ACTIVE) {
+  if (
+    newStatus === SubscriptionStatus.ACTIVE &&
+    // recovering from a billing issue is not a new subscription
+    !(oldStatus && FAILED_STATUSES.includes(oldStatus))
+  ) {
     notify({
       ...base,
       message: "Welcome to Premium!",
@@ -181,11 +185,18 @@ const saveState = async (
     currentPeriodEnd,
     cancelledAt: state.cancelledAt,
   };
-  const saved = await prisma.subscription.upsert({
-    where: { authId },
-    create: { authId, ...fields, ...data },
-    update: { ...fields, ...data },
-    select: { id: true },
+  const upsert = () =>
+    prisma.subscription.upsert({
+      where: { authId },
+      create: { authId, ...fields, ...data },
+      update: { ...fields, ...data },
+      select: { id: true },
+    });
+  // webhook + app sync can create the row concurrently: the loser hits the
+  // unique authId index and simply retries (now as an update)
+  const saved = await upsert().catch(error => {
+    if (error?.code === "P2002") return upsert();
+    throw error;
   });
 
   notifyStatusChange(authId, saved.id, old, state);
@@ -262,8 +273,14 @@ const syncFromRevenueCat = async (authId: string, event?: TRevenueCatEvent) => {
   }
 
   const { id: entitlementId, ent, active } = picked;
-  const productId = ent.product_identifier;
-  const sub = subscriber.subscriptions?.[productId];
+  // Play Store: the base plan is a separate field; packages and webhooks use
+  // `subscriptionId:basePlanId`
+  const productId = ent.product_plan_identifier
+    ? `${ent.product_identifier}:${ent.product_plan_identifier}`
+    : ent.product_identifier;
+  const sub =
+    subscriber.subscriptions?.[productId] ??
+    subscriber.subscriptions?.[ent.product_identifier];
 
   let status: SubscriptionStatus = SubscriptionStatus.EXPIRED;
   if (active) status = SubscriptionStatus.ACTIVE;
@@ -273,6 +290,19 @@ const syncFromRevenueCat = async (authId: string, event?: TRevenueCatEvent) => {
 
   const pkg = await findPackageByProduct(productId);
   const originalTransactionId = event?.original_transaction_id ?? null;
+  // same ref on the webhook and the app-sync path, so dedupe keys match
+  const ref = `${authId}:${productId}`;
+
+  // grace period: still Premium, but the user must fix their payment now
+  if (active && sub?.billing_issues_detected_at) {
+    notify({
+      receiverId: authId,
+      modelType: NotificationModelType.SUBSCRIPTION,
+      message: "Payment failed",
+      description: "Please update your payment method to keep Premium.",
+      dedupeKey: `sub-grace:${ref}:${sub.billing_issues_detected_at}`,
+    });
+  }
 
   await saveState(
     authId,
@@ -282,7 +312,7 @@ const syncFromRevenueCat = async (authId: string, event?: TRevenueCatEvent) => {
       currentPeriodStart: toDate(sub?.purchase_date ?? ent.purchase_date),
       currentPeriodEnd: toDate(ent.expires_date),
       cancelledAt: toDate(sub?.refunded_at ?? sub?.unsubscribe_detected_at),
-      ref: originalTransactionId ?? `${authId}:${productId}`,
+      ref,
     },
     {
       revenueCatAppUserId: authId,
@@ -435,7 +465,9 @@ const addCycle = (from: Date, cycle: BillingCycle) => {
  * goes through the same path as a real INITIAL_PURCHASE webhook.
  */
 const testPurchase = async (authId: string, packageId: string) => {
-  if (config.env === "production") throw new ApiError(404, "Not found");
+  if (!config.revenueCat.enableTestPurchase) {
+    throw new ApiError(404, "Not found");
+  }
 
   const pkg = await prisma.package.findFirst({
     where: { id: packageId, isDeleted: false },

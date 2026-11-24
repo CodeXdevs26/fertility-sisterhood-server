@@ -18,11 +18,18 @@ export const calculatePagination = ({
   sortBy,
   orderBy,
 }: TPaginationOptions): TReturnOptions => {
-  const take = Number(limit);
-  const skip = Number(page - 1) * take;
+  // query strings arrive unvalidated: NaN / 0 / negatives / huge limits would
+  // make Prisma throw (500) or return everything
+  const toPositiveInt = (value: unknown, fallback: number) => {
+    const n = Math.floor(Number(value));
+    return Number.isFinite(n) && n >= 1 ? n : fallback;
+  };
+  const safePage = toPositiveInt(page, 1);
+  const take = Math.min(toPositiveInt(limit, 10), 100);
+  const skip = (safePage - 1) * take;
 
   return {
-    page: Number(page),
+    page: safePage,
     skip,
     take,
     sortBy,

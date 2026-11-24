@@ -25,7 +25,8 @@ export const metaSwagger = {
             totalRevenue: {
               type: "number",
               example: 15230.5,
-              description: "EUR, succeeded payments minus refunds",
+              description:
+                "GBP (other currencies converted at fixed rates), succeeded payments minus refunds; sandbox excluded",
             },
             revenueThisMonth: { type: "number", example: 2040 },
             pendingSupports: { type: "integer", example: 7 },
@@ -36,9 +37,9 @@ export const metaSwagger = {
     "/meta/earning-overview": {
       get: op({
         tag,
-        summary: "Revenue per month (EUR)",
+        summary: "Revenue per month (GBP)",
         description:
-          "Returns all 12 months (amount is 0 for empty months). Succeeded payments minus refunds, by payment date (UTC).",
+          "Returns all 12 months (amount is 0 for empty months). GBP (other currencies converted at fixed rates). Succeeded payments minus refunds, by payment date (UTC).",
         access: "admin",
         parameters: [
           queryParam("year", "Year to report (default: current UTC year)", {

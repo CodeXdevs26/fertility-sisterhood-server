@@ -48,7 +48,7 @@ export const authSwagger = {
           ])
         ),
         responses: ok("Signup successful!", ref("User"), 201),
-        errors: [400],
+        errors: [400, 429],
       }),
     },
     "/auth/login": {
@@ -56,7 +56,7 @@ export const authSwagger = {
         tag,
         summary: "Login with email and password",
         description:
-          "Returns an access token in the body and sets the refresh token in the `player-centralRefreshToken` httpOnly cookie. Fails with 400 if the account is `PENDING`, `BLOCKED`, `DELETED` or was created with Google.",
+          "Returns an access token in the body and sets the refresh token in the `player-centralRefreshToken` httpOnly cookie (`SameSite=Lax`). With `isMobileApp: true` the refresh token is also returned in the body; send it back in the `x-refresh-token` header to refresh. Fails with 400 if the account is `PENDING`, `BLOCKED`, `DELETED` or was created with Google.",
         requestBody: jsonBody(
           obj(
             {
@@ -68,9 +68,13 @@ export const authSwagger = {
               ),
               timezone: optStr(
                 "Asia/Dhaka",
-                "IANA timezone of the device (optional). Used to send reminders at the user's local 08:00 / 20:00. Defaults to UTC."
+                "IANA timezone of the device (optional). Used for the user's local day and to send reminders at local 08:00 / 20:00. Defaults to Europe/London."
               ),
-              isMobileApp: { type: "boolean", default: false },
+              isMobileApp: {
+                type: "boolean",
+                default: false,
+                description: "`true` also returns `refreshToken` in the body",
+              },
             },
             ["email", "password"]
           )
@@ -79,9 +83,13 @@ export const authSwagger = {
           type: "object",
           properties: {
             accessToken: { type: "string", example: "eyJhbGciOiJIUzI1NiIs..." },
+            refreshToken: {
+              type: "string",
+              description: "Only when `isMobileApp: true`",
+            },
           },
         }),
-        errors: [400],
+        errors: [400, 429],
       }),
     },
     "/auth/refresh-token": {
@@ -89,7 +97,16 @@ export const authSwagger = {
         tag,
         summary: "Get a new access token",
         description:
-          "Reads the refresh token from the `player-centralRefreshToken` cookie (set at login). No request body or Authorization header is needed.",
+          "Reads the refresh token from the `player-centralRefreshToken` cookie (set at login), or from the `x-refresh-token` header (mobile apps). Fails with 401 if the account is no longer `ACTIVE` or the token was revoked (password change / reset, block).",
+        parameters: [
+          {
+            name: "x-refresh-token",
+            in: "header",
+            required: false,
+            description: "Refresh token for clients without cookies",
+            schema: { type: "string" },
+          },
+        ],
         responses: ok("Token refreshed successfully!", {
           type: "object",
           properties: {
@@ -116,7 +133,7 @@ export const authSwagger = {
           )
         ),
         responses: ok("Password reset successfully!"),
-        errors: [401, 404],
+        errors: [401, 404, 429],
       }),
     },
     "/auth/change-password": {
@@ -130,8 +147,19 @@ export const authSwagger = {
             "newPassword",
           ])
         ),
-        responses: ok("Password changed successfully!"),
-        errors: [400, 404],
+        description:
+          "Logs out every other device (all earlier tokens are revoked). This device gets new tokens: the access token in the body and the refresh token in the cookie; clients that sent `x-refresh-token` also get `refreshToken` in the body.",
+        responses: ok("Password changed successfully!", {
+          type: "object",
+          properties: {
+            accessToken: { type: "string" },
+            refreshToken: {
+              type: "string",
+              description: "Only when the request had `x-refresh-token`",
+            },
+          },
+        }),
+        errors: [400, 404, 429],
       }),
     },
     "/auth/change-account-status/{userId}": {

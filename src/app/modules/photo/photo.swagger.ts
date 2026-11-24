@@ -1,4 +1,4 @@
-import { dateTime, obj, str } from "../../docs/fields.js";
+import { dateTime, obj, objectId, str } from "../../docs/fields.js";
 import {
   formBody,
   idParam,
@@ -45,7 +45,7 @@ export const photoSwagger = {
         tag,
         summary: "List my photos",
         description:
-          "List items are a short form: `caption`, `file`, `fileSize` and `date` only. Use `GET /photos/{id}` for the full record.",
+          "List items are a short form: `id`, `caption`, `milestone`, `file`, `fileSize` and `date`. Use `GET /photos/{id}` for the full record.",
         access: "user",
         premium: true,
         parameters: [
@@ -57,7 +57,9 @@ export const photoSwagger = {
           paged("photos", {
             type: "object",
             properties: {
+              id: objectId("Photo id"),
               caption: { type: "string" },
+              milestone: ref("PhotoMilestone"),
               file: { type: "string", format: "uri" },
               fileSize: { type: "integer" },
               date: dateTime(),

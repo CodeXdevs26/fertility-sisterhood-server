@@ -8,36 +8,40 @@ datasource db {
 }
 
 model Auth {
-  id            String         @id @default(auto()) @map("_id") @db.ObjectId
-  email         String         @unique
-  password      String
-  name          String
-  role          UserRole
-  status        UserStatus     @default(PENDING)
-  loginProvider LoginProvider
-  fcmToken      String?
-  timezone      String?
-  consent       Consent?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  otp           OTP?
-  notifications Notification[]
-  symptoms      Symptom[]
-  appointments  Appointment[]
-  medications   Medication[]
-  supplements   Supplement[]
-  journals      Journal[]
-  checklists    Checklist[]
-  costs         Cost[]
-  cycles        Cycle[]
-  testResults   TestResult[]
-  notes         Note[]
-  questions     Question[]
-  documents     Document[]
-  photos        Photo[]
-  subscription  Subscription?
-  supports      Support[]
-  payments      Payment[]
+  id                String         @id @default(auto()) @map("_id") @db.ObjectId
+  email             String         @unique
+  password          String
+  name              String
+  role              UserRole
+  status            UserStatus     @default(PENDING)
+  loginProvider     LoginProvider
+  fcmToken          String?
+  timezone          String?
+  /// bumped on password change/reset, block and delete: revokes every issued token
+  tokenVersion      Int?
+  /// set once the admin checklist templates were copied to this user
+  checklistSeededAt DateTime?
+  consent           Consent?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  otp               OTP?
+  notifications     Notification[]
+  symptoms          Symptom[]
+  appointments      Appointment[]
+  medications       Medication[]
+  supplements       Supplement[]
+  journals          Journal[]
+  checklists        Checklist[]
+  costs             Cost[]
+  cycles            Cycle[]
+  testResults       TestResult[]
+  notes             Note[]
+  questions         Question[]
+  documents         Document[]
+  photos            Photo[]
+  subscription      Subscription?
+  supports          Support[]
+  payments          Payment[]
 }
 
 /// Choices from the app's "Your consent matters" screen (UK GDPR).
@@ -293,7 +297,7 @@ model Package {
   entitlementId       String
   description         String[]
   price               Float
-  currency            String         @default("eur")
+  currency            String         @default("gbp")
   isDeleted           Boolean        @default(false)
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
@@ -336,22 +340,25 @@ model Subscription {
 
 /// One record per store transaction (from RevenueCat webhook events).
 model Payment {
-  id             String        @id @default(auto()) @map("_id") @db.ObjectId
-  authId         String?       @db.ObjectId
-  auth           Auth?         @relation(fields: [authId], references: [id])
-  transactionId  String        @unique
-  store          String?
-  productId      String?
-  packageId      String?       @db.ObjectId
-  eventType      String?
+  id                String        @id @default(auto()) @map("_id") @db.ObjectId
+  authId            String?       @db.ObjectId
+  auth              Auth?         @relation(fields: [authId], references: [id])
+  transactionId     String        @unique
+  store             String?
+  productId         String?
+  packageId         String?       @db.ObjectId
+  eventType         String?
   /// SANDBOX | PRODUCTION
-  environment    String?
-  amount         Float // major units (e.g. 9.99)
-  amountRefunded Float         @default(0)
-  currency       String
-  status         PaymentStatus
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  environment       String?
+  amount            Float // major units (e.g. 9.99)
+  amountRefunded    Float         @default(0)
+  /// amount / amountRefunded converted to GBP (the reporting currency); null = unknown currency
+  amountGbp         Float?
+  amountRefundedGbp Float?
+  currency          String
+  status            PaymentStatus
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   @@index([status, createdAt])
 }
@@ -477,7 +484,7 @@ enum SymptomName {
   HEADACHE
   NAUSEA
   BREAST_TENDERNESS
-  CAMPING
+  CRAMPING
   OTHER
 }
 

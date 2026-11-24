@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { NotificationModelType, UserRole, UserStatus } from "@prisma/client";
 import prisma from "../utils/prisma.js";
+import { DEFAULT_TIMEZONE } from "../utils/userDay.js";
 import { createNotification } from "../modules/notification/notification.utils.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -70,7 +71,7 @@ export const runMedicationReminderJob = async (now = new Date()) => {
 
   for (const medication of medications) {
     try {
-      const timeZone = medication.auth.timezone || "UTC";
+      const timeZone = medication.auth.timezone || DEFAULT_TIMEZONE;
       const firstDay = toDay(medication.startDate);
       const lastDay = toDay(medication.endDate);
 

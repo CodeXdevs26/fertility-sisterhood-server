@@ -10,6 +10,8 @@ export type TRevenueCatEntitlement = {
   expires_date: string | null;
   grace_period_expires_date?: string | null;
   product_identifier: string;
+  /** Play Store base plan id */
+  product_plan_identifier?: string | null;
   purchase_date: string;
 };
 
@@ -49,6 +51,8 @@ export type TRevenueCatEvent = {
   transaction_id?: string;
   original_transaction_id?: string;
   price_in_purchased_currency?: number | null;
+  /** price in USD (RevenueCat converts it) */
+  price?: number | null;
   currency?: string | null;
   purchased_at_ms?: number;
   expiration_at_ms?: number | null;
@@ -112,4 +116,30 @@ export const verifyWebhookAuth = (header: string | undefined) => {
   if (!header) return false;
   const token = header.replace(/^Bearer\s+/i, "");
   return safeEqual(header, secret) || safeEqual(token, secret);
+};
+
+/**
+ * Best-effort: removes the subscriber (and its personal data) from RevenueCat
+ * when an account is deleted. It does NOT cancel a store subscription - only
+ * the user can do that in the App Store / Play Store.
+ */
+export const deleteSubscriber = async (appUserId: string) => {
+  if (!config.revenueCat.apiKey) return;
+  try {
+    const response = await fetch(
+      `${API_URL}/subscribers/${encodeURIComponent(appUserId)}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${config.revenueCat.apiKey}` },
+        signal: AbortSignal.timeout(10_000),
+      }
+    );
+    if (!response.ok && response.status !== 404) {
+      console.error(
+        `RevenueCat delete subscriber responded ${response.status}`
+      );
+    }
+  } catch (error) {
+    console.error("RevenueCat delete subscriber failed:", error);
+  }
 };

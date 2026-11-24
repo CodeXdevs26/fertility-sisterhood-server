@@ -6,14 +6,14 @@ type TValidateOptions = {
   formData?: boolean;
   /** validate `req.query` instead of the body and put the parsed values back */
   query?: boolean;
-  /** replace `req.body` with the parsed result (coercions/defaults reach the controller) */
+  /** @deprecated the body is always replaced with the parsed result now */
   replace?: boolean;
 };
 
 const validate =
   (
     schema: ZodTypeAny,
-    { formData = false, query = false, replace = false }: TValidateOptions = {}
+    { formData = false, query = false }: TValidateOptions = {}
   ) =>
   async (req: Request, _res: Response, next: NextFunction) => {
     try {
@@ -37,10 +37,12 @@ const validate =
             JSON.parse(req?.body?.payload || "{}")
           );
         }
-      } else if (replace) {
-        req.body = await schema.parseAsync(req.body ?? {});
       } else {
-        await schema.parseAsync(req.body);
+        // Always replace the body with the parsed result: unknown keys are
+        // stripped (services spread payloads into Prisma, so an unstripped
+        // body allows nested writes like `auth: { update: { role } }`), and
+        // trims/defaults/coercions reach the service.
+        req.body = await schema.parseAsync(req.body ?? {});
       }
       next();
     } catch (error) {

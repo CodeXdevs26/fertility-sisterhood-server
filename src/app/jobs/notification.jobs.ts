@@ -7,6 +7,7 @@ import {
   UserStatus,
 } from "@prisma/client";
 import prisma from "../utils/prisma.js";
+import { DEFAULT_TIMEZONE } from "../utils/userDay.js";
 import { createNotification } from "../modules/notification/notification.utils.js";
 
 const DIGEST_HOUR = 8;
@@ -181,7 +182,7 @@ export const runHourlyNotificationJob = async (now = new Date()) => {
 
   for (const user of users) {
     try {
-      const timeZone = user.timezone || "UTC";
+      const timeZone = user.timezone || DEFAULT_TIMEZONE;
       const { localDate, hour } = getLocalParts(now, timeZone);
       if (hour !== DIGEST_HOUR && hour !== EVENING_HOUR) continue;
 

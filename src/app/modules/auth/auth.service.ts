@@ -138,6 +138,7 @@ const login = async (payload: TLoginInput) => {
     email: auth.email,
     role: auth.role,
     id: auth.id,
+    tv: auth.tokenVersion ?? 0,
   };
 
   const accessToken = jsonwebtoken.sign(
@@ -329,6 +330,7 @@ const resetPassword = async (payload: TResetPasswordInput) => {
     select: {
       id: true,
       name: true,
+      tokenVersion: true,
     },
   });
 
@@ -364,6 +366,8 @@ const resetPassword = async (payload: TResetPasswordInput) => {
       },
       data: {
         password: hashedPassword,
+        // log out every device: old tokens may belong to whoever knew the old password
+        tokenVersion: (auth.tokenVersion ?? 0) + 1,
       },
     });
 
@@ -375,8 +379,7 @@ const resetPassword = async (payload: TResetPasswordInput) => {
   });
 
   // send email
-  const subject =
-    "Your Player Central Password Has Been Reset 🎉 - Fertility Sisterhood";
+  const subject = "Your Password Has Been Reset - Fertility Sisterhood";
   const path = "./src/app/emailTemplates/passwordResetSuccess.html";
   const replacements = {
     name: auth.name || "there",
@@ -402,14 +405,38 @@ const changePassword = async (
 
   const hashedPassword = await bcrypt.hash(payload.newPassword, 10);
 
-  await prisma.auth.update({
+  // other devices are logged out (tokenVersion bump); this device gets new tokens
+  const updated = await prisma.auth.update({
     where: {
       id: userId,
     },
     data: {
       password: hashedPassword,
+      tokenVersion: (auth.tokenVersion ?? 0) + 1,
     },
+    select: { id: true, email: true, role: true, tokenVersion: true },
   });
+
+  const jwtPayload = {
+    email: updated.email,
+    role: updated.role,
+    id: updated.id,
+    tv: updated.tokenVersion ?? 0,
+  };
+  return {
+    accessToken: jsonwebtoken.sign(
+      jwtPayload,
+      config.jwt.accessSecret as Secret,
+      {
+        expiresIn: config.jwt.accessExpiration as any,
+      }
+    ),
+    refreshToken: jsonwebtoken.sign(
+      jwtPayload,
+      config.jwt.refreshSecret as Secret,
+      { expiresIn: config.jwt.refreshExpiration as any }
+    ),
+  };
 };
 
 const changeAccountStatus = async (userId: string, status: UserStatus) => {
@@ -446,8 +473,11 @@ const changeAccountStatus = async (userId: string, status: UserStatus) => {
     },
     data: {
       status: status,
-      // blocked / deleted accounts must not receive pushes
-      ...(status !== UserStatus.ACTIVE ? { fcmToken: null } : {}),
+      // blocked / deleted accounts must not receive pushes, and lose every
+      // issued token at once
+      ...(status !== UserStatus.ACTIVE
+        ? { fcmToken: null, tokenVersion: (auth.tokenVersion ?? 0) + 1 }
+        : {}),
     },
   });
 
@@ -476,21 +506,31 @@ const refreshToken = async (token: string) => {
   const decodedUser = jwt.verify(token, config.jwt.refreshSecret as Secret);
   if (!decodedUser) throw new ApiError(401, "Unauthorized!");
 
-  const user = await prisma.auth.findUniqueOrThrow({
+  // blocked / deleted accounts must not keep minting access tokens
+  const user = await prisma.auth.findFirst({
     where: {
       id: (decodedUser as TAuthUser).id,
+      status: UserStatus.ACTIVE,
     },
     select: {
       id: true,
       email: true,
       role: true,
+      tokenVersion: true,
     },
   });
+  // a password change / reset or block bumps tokenVersion: old refresh tokens die
+  if (
+    !user ||
+    (user.tokenVersion ?? 0) !== ((decodedUser as TAuthUser).tv ?? 0)
+  )
+    throw new ApiError(401, "Unauthorized!");
 
   const jwtPayload = {
     email: user.email,
     role: user.role,
     id: user.id,
+    tv: user.tokenVersion ?? 0,
   };
 
   const accessToken = jwt.sign(jwtPayload, config.jwt.accessSecret as Secret, {

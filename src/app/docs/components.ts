@@ -59,7 +59,7 @@ export const ENUMS = {
     "HEADACHE",
     "NAUSEA",
     "BREAST_TENDERNESS",
-    "CAMPING",
+    "CRAMPING",
     "OTHER",
   ],
   NotificationModelType: [
@@ -132,6 +132,10 @@ export const components = {
       "Validation error (zod / prisma)",
       "Validation error!"
     ),
+    Error429: errorResponse(
+      "Rate limit exceeded (auth: 20, OTP: 10 requests per 15 minutes per IP; OTP resend: once a minute)",
+      "Too many attempts, please try again later!"
+    ),
     Error500: errorResponse("Unexpected server error", "Something went wrong!"),
     Error502: errorResponse(
       "Upstream service (RevenueCat) failed",
@@ -187,9 +191,21 @@ export const components = {
       type: "object",
       properties: {
         id,
-        amount: { type: "number", example: 9.99 },
+        amount: {
+          type: "number",
+          example: 9.99,
+          description: "In the purchase `currency`",
+        },
         amountRefunded: { type: "number", example: 0 },
-        currency: { type: "string", example: "eur" },
+        currency: { type: "string", example: "gbp" },
+        amountGbp: {
+          type: "number",
+          nullable: true,
+          example: 9.99,
+          description:
+            "Converted to GBP (the reporting currency); `null` if the currency could not be converted",
+        },
+        amountRefundedGbp: { type: "number", nullable: true, example: 0 },
         status: ref("PaymentStatus"),
         store: {
           type: "string",
@@ -312,7 +328,7 @@ export const components = {
           ...id,
           nullable: true,
           description:
-            "Id of the related record (appointment, medication, subscription, support) for deep-linking",
+            "Id of the related record for deep-linking (appointment, medication, subscription, support). Admin notifications about a user (new user, subscription, payment failed) carry the user id.",
         },
         read: { type: "boolean", example: false },
         pushed: {
@@ -543,7 +559,7 @@ export const components = {
         price: { type: "number", example: 9.99 },
         currency: {
           type: "string",
-          example: "eur",
+          example: "gbp",
           description: "ISO currency code of price (lowercase)",
         },
         isDeleted: { type: "boolean", example: false },

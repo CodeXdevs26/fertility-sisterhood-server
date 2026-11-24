@@ -4,7 +4,10 @@ import handleAsyncRequest from "../../utils/handleAsyncRequest.js";
 import pick from "../../utils/pick.js";
 import { sendResponse } from "../../utils/sendResponse.js";
 import { checklistServices } from "./checklist.service.js";
-import { TChecklistQuery } from "./checklist.validation.js";
+import {
+  TChecklistListQuery,
+  TChecklistQuery,
+} from "./checklist.validation.js";
 
 const create = handleAsyncRequest(async (req: TRequest, res: Response) => {
   const data = await checklistServices.create(req.user!.id, req.body);
@@ -13,6 +16,15 @@ const create = handleAsyncRequest(async (req: TRequest, res: Response) => {
     message: "Checklist item created successfully!",
     data,
   });
+});
+
+const getMy = handleAsyncRequest(async (req: TRequest, res: Response) => {
+  const data = await checklistServices.getMy(
+    req.user!.id,
+    pick(req.query, ["page", "limit"]),
+    req.query as TChecklistListQuery
+  );
+  sendResponse(res, { message: "Checklist fetched successfully!", data });
 });
 
 const getToday = handleAsyncRequest(async (req: TRequest, res: Response) => {
@@ -55,6 +67,7 @@ const remove = handleAsyncRequest(async (req: TRequest, res: Response) => {
 
 export const checklistController = {
   create,
+  getMy,
   getToday,
   markDone,
   update,

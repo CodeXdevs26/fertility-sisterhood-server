@@ -9,7 +9,7 @@ import { LIVE_PAYMENT, REVENUE_STATUSES } from "../payment/payment.service.js";
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
-/** Net revenue (collected minus refunded) of payments matching the date range. */
+/** Net revenue in GBP (collected minus refunded) of payments in the date range. */
 const sumRevenue = async (createdAt?: { gte: Date; lt?: Date }) => {
   const { _sum } = await prisma.payment.aggregate({
     where: {
@@ -17,9 +17,9 @@ const sumRevenue = async (createdAt?: { gte: Date; lt?: Date }) => {
       status: { in: REVENUE_STATUSES },
       ...(createdAt ? { createdAt } : {}),
     },
-    _sum: { amount: true, amountRefunded: true },
+    _sum: { amountGbp: true, amountRefundedGbp: true },
   });
-  return round2((_sum.amount ?? 0) - (_sum.amountRefunded ?? 0));
+  return round2((_sum.amountGbp ?? 0) - (_sum.amountRefundedGbp ?? 0));
 };
 
 const MONTHS = [
@@ -59,7 +59,14 @@ const getStats = async () => {
       where: { role: UserRole.USER, status: UserStatus.BLOCKED },
     }),
     prisma.subscription.count({
-      where: { status: SubscriptionStatus.ACTIVE },
+      where: {
+        status: SubscriptionStatus.ACTIVE,
+        // sandbox / test purchases and removed accounts are not subscribers
+        NOT: { environment: "SANDBOX" },
+        auth: {
+          is: { status: { in: [UserStatus.ACTIVE, UserStatus.BLOCKED] } },
+        },
+      },
     }),
     prisma.auth.count({
       where: {
@@ -97,13 +104,15 @@ const getEarningOverview = async (query: Record<string, unknown>) => {
         lt: new Date(Date.UTC(year + 1, 0, 1)),
       },
     },
-    select: { amount: true, amountRefunded: true, createdAt: true },
+    select: { amountGbp: true, amountRefundedGbp: true, createdAt: true },
   });
 
+  // GBP: amounts in other currencies were converted when saved
   const amounts = new Array<number>(12).fill(0);
-  payments.forEach(({ amount, amountRefunded, createdAt }) => {
+  payments.forEach(({ amountGbp, amountRefundedGbp, createdAt }) => {
     const month = createdAt.getUTCMonth();
-    amounts[month] = (amounts[month] ?? 0) + amount - amountRefunded;
+    amounts[month] =
+      (amounts[month] ?? 0) + (amountGbp ?? 0) - (amountRefundedGbp ?? 0);
   });
 
   return MONTHS.map((month, index) => ({

@@ -34,8 +34,8 @@ const fields = {
     type: "string",
     minLength: 3,
     maxLength: 3,
-    example: "eur",
-    description: "ISO code, saved lowercase (default `eur`)",
+    example: "gbp",
+    description: "ISO code, saved lowercase (default `gbp`)",
   },
 };
 
@@ -95,10 +95,20 @@ export const packageSwagger = {
       patch: op({
         tag,
         summary: "Update package",
-        description: "All body fields are optional - send only what changes.",
+        description:
+          "All body fields are optional - send only what changes. A deleted package returns 404 unless the body has `isDeleted: false`, which restores it.",
         access: "admin",
         parameters: [idParam()],
-        requestBody: jsonBody(obj(fields)),
+        requestBody: jsonBody(
+          obj({
+            ...fields,
+            isDeleted: {
+              type: "boolean",
+              enum: [false],
+              description: "`false` restores a soft-deleted package",
+            },
+          })
+        ),
         responses: ok("Package updated successfully!", ref("Package")),
         errors: [404, 409],
       }),

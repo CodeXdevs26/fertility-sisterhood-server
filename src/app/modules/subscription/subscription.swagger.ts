@@ -40,9 +40,9 @@ export const subscriptionSwagger = {
     "/subscriptions/test-purchase": {
       post: op({
         tag,
-        summary: "Simulate a purchase (non-production)",
+        summary: "Simulate a purchase (QA only)",
         description:
-          "Activates Premium without RevenueCat: `store: TEST_API`, expiry +1 month (MONTHLY) or +1 year (ANNUAL). Replaces any existing subscription of the user and records a payment through the same path as a real `INITIAL_PURCHASE` webhook (marked `SANDBOX`, so it is not counted as revenue). Returns 404 when `NODE_ENV=production`.",
+          "Activates Premium without RevenueCat: `store: TEST_API`, expiry +1 month (MONTHLY) or +1 year (ANNUAL). Replaces any existing subscription of the user and records a payment through the same path as a real `INITIAL_PURCHASE` webhook (marked `SANDBOX`, so it is not counted as revenue). Returns 404 unless `ENABLE_TEST_PURCHASE=true` (always 404 when `NODE_ENV=production`).",
         access: "user",
         requestBody: jsonBody(
           obj({ packageId: objectId("Package to buy") }, ["packageId"])
@@ -60,7 +60,7 @@ export const subscriptionSwagger = {
         tag,
         summary: "RevenueCat webhook",
         description:
-          "Called by RevenueCat only. The `Authorization` header must equal `REVENUECAT_WEBHOOK_SECRET` (a `Bearer ` prefix is allowed). For every event the user's state is re-read from the RevenueCat API (events can arrive out of order). Payments are recorded for `INITIAL_PURCHASE`, `RENEWAL`, `PRODUCT_CHANGE`, `BILLING_ISSUE` (failed) and refunds (`CANCELLATION` with `cancel_reason: CUSTOMER_SUPPORT`), deduplicated by `transaction_id`. `CANCELLATION` alone only turns auto-renew off; Premium stays until `EXPIRATION`. Unknown or anonymous users are acknowledged with 200 and ignored.",
+          "Called by RevenueCat only. The `Authorization` header must equal `REVENUECAT_WEBHOOK_SECRET` (a `Bearer ` prefix is allowed). For every event the user's state is re-read from the RevenueCat API (events can arrive out of order). Payments are recorded for `INITIAL_PURCHASE`, `RENEWAL`, `BILLING_ISSUE` (failed) and refunds (`CANCELLATION` with `cancel_reason: CUSTOMER_SUPPORT`), deduplicated by `transaction_id`. `CANCELLATION` alone only turns auto-renew off; Premium stays until `EXPIRATION`. Unknown or anonymous users are acknowledged with 200 and ignored.",
         parameters: [
           {
             name: "Authorization",

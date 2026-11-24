@@ -3,16 +3,24 @@ import {
   calculatePagination,
   TPaginationOptions,
 } from "../../utils/paginationCalculation.js";
-import { getDayBounds } from "../../utils/getDayBounds.js";
+import { assertDateRange } from "../../utils/getDayBounds.js";
+import {
+  getUserTimeZone,
+  getUserToday,
+  withCalendarDays,
+} from "../../utils/userDay.js";
 import prisma from "../../utils/prisma.js";
 import {
   TCreateSupplement,
   TUpdateSupplement,
 } from "./supplement.validation.js";
 
-const create = async (authId: string, payload: TCreateSupplement) =>
-  prisma.supplement.create({
-    data: { authId, ...payload },
+const create = async (authId: string, payload: TCreateSupplement) => {
+  // course days are calendar days at UTC midnight (the reminder job relies on it)
+  payload = await withCalendarDays(authId, payload, ["startDate", "endDate"]);
+  assertDateRange(payload.startDate, payload.endDate);
+  return prisma.supplement.create({
+    data: { ...payload, authId },
     select: {
       id: true,
       name: true,
@@ -24,11 +32,13 @@ const create = async (authId: string, payload: TCreateSupplement) =>
       createdAt: true,
     },
   });
+};
 
 const getMy = async (authId: string, options: TPaginationOptions) => {
   const { page, take, skip } = calculatePagination(options);
   const where = { authId };
-  const today = getDayBounds(new Date());
+  // intake rows hold the moment a dose was marked: match the user's local day
+  const today = getUserToday(await getUserTimeZone(authId)).instantRange;
   const [supplements, total] = await Promise.all([
     prisma.supplement.findMany({
       where,
@@ -65,7 +75,7 @@ const markTakenToday = async (authId: string, id: string) => {
   });
   if (!supplement) throw new ApiError(404, "Supplement not found");
 
-  const date = getDayBounds(new Date());
+  const date = getUserToday(await getUserTimeZone(authId)).instantRange;
   const existingChecklist = await prisma.supplementChecklist.findFirst({
     where: { supplementId: id, date },
     select: { id: true, supplementId: true, date: true },
@@ -101,11 +111,16 @@ const update = async (
   id: string,
   payload: TUpdateSupplement
 ) => {
+  payload = await withCalendarDays(authId, payload, ["startDate", "endDate"]);
   const supplement = await prisma.supplement.findFirst({
     where: { id, authId },
-    select: { id: true },
+    select: { id: true, startDate: true, endDate: true },
   });
   if (!supplement) throw new ApiError(404, "Supplement not found");
+  assertDateRange(
+    payload.startDate ?? supplement.startDate,
+    payload.endDate ?? supplement.endDate
+  );
 
   return prisma.supplement.update({
     where: { id },

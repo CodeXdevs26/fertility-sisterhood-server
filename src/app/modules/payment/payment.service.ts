@@ -5,9 +5,16 @@ import {
 } from "../../utils/paginationCalculation.js";
 import prisma from "../../utils/prisma.js";
 import { TRevenueCatEvent } from "../../utils/revenuecat.js";
+import { REPORTING_CURRENCY, toGbp } from "../../utils/currency.js";
 import { findPackageByProduct } from "../package/package.service.js";
 
-const paymentSelect = { id: true, status: true, authId: true };
+const paymentSelect = {
+  id: true,
+  status: true,
+  authId: true,
+  amount: true,
+  amountGbp: true,
+};
 
 /** RevenueCat reports refunds as CANCELLATION with this reason. */
 export const isRefundEvent = (event: TRevenueCatEvent) =>
@@ -15,9 +22,11 @@ export const isRefundEvent = (event: TRevenueCatEvent) =>
 
 const statusForEvent = (event: TRevenueCatEvent): PaymentStatus | null => {
   switch (event.type) {
+    // PRODUCT_CHANGE is informational (the change is only initiated, and its
+    // product_id is the OLD product); the charge arrives as RENEWAL /
+    // INITIAL_PURCHASE, so recording it too would double count revenue
     case "INITIAL_PURCHASE":
     case "RENEWAL":
-    case "PRODUCT_CHANGE":
       return PaymentStatus.SUCCEEDED;
     case "BILLING_ISSUE":
       return PaymentStatus.FAILED;
@@ -28,7 +37,7 @@ const statusForEvent = (event: TRevenueCatEvent): PaymentStatus | null => {
 
 /**
  * Saves / updates the Payment row for a RevenueCat event, deduped by
- * `transaction_id`. Only INITIAL_PURCHASE, RENEWAL, PRODUCT_CHANGE,
+ * `transaction_id`. Only INITIAL_PURCHASE, RENEWAL,
  * BILLING_ISSUE and refunds are recorded; free (trial) transactions are not.
  */
 const upsertRevenueCatPayment = async (
@@ -40,6 +49,8 @@ const upsertRevenueCatPayment = async (
   if (!status || !transactionId) return null;
 
   const amount = Math.abs(event.price_in_purchased_currency ?? 0);
+  const currency = (event.currency ?? REPORTING_CURRENCY).toLowerCase();
+  const amountGbp = toGbp(amount, currency, event.price);
   const existing = await prisma.payment.findUnique({
     where: { transactionId },
     select: paymentSelect,
@@ -49,9 +60,12 @@ const upsertRevenueCatPayment = async (
     if (existing) {
       return prisma.payment.update({
         where: { id: existing.id },
+        // refund events can come without a price: then the whole payment
+        // is refunded (REFUNDED rows still count as revenue minus amountRefunded)
         data: {
           status,
-          ...(amount ? { amountRefunded: amount } : {}),
+          amountRefunded: amount || existing.amount,
+          amountRefundedGbp: amount ? amountGbp : existing.amountGbp,
         },
         select: paymentSelect,
       });
@@ -88,7 +102,9 @@ const upsertRevenueCatPayment = async (
       environment: event.environment ?? null,
       amount,
       amountRefunded: status === PaymentStatus.REFUNDED ? amount : 0,
-      currency: (event.currency ?? "eur").toLowerCase(),
+      amountGbp,
+      amountRefundedGbp: status === PaymentStatus.REFUNDED ? amountGbp : 0,
+      currency,
       status,
       createdAt: new Date(
         event.purchased_at_ms ?? event.event_timestamp_ms ?? Date.now()
@@ -137,6 +153,8 @@ const getAll = async (
         id: true,
         amount: true,
         amountRefunded: true,
+        amountGbp: true,
+        amountRefundedGbp: true,
         currency: true,
         status: true,
         store: true,

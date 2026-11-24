@@ -37,6 +37,9 @@ const getMy = async (authId: string, options: TPaginationOptions) => {
         date: true,
         isPaid: true,
         ivfRound: true,
+        type: true,
+        category: true,
+        description: true,
         createdAt: true,
       },
     }),
@@ -101,6 +104,10 @@ const remove = async (authId: string, id: string) => {
       date: true,
       isPaid: true,
       ivfRound: true,
+      type: true,
+      category: true,
+      description: true,
+      createdAt: true,
     },
   });
 };

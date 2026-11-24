@@ -53,9 +53,24 @@ const globalErrorHandler = (
     err.name === "PrismaClientKnownRequestError"
   ) {
     if (err.code === "P2002") {
-      message = `${err.meta?.modelName === "Auth" ? "User" : err.meta?.modelName} already exists with this ${
-        (err.meta?.target as string[] | number[])[0]
-      }!`;
+      status = 409;
+      // on MongoDB `target` is usually the index name (e.g. "Auth_email_key")
+      const target = err.meta?.target as string | string[] | undefined;
+      const field = Array.isArray(target)
+        ? target[0]
+        : target?.replace(/^[^_]+_/, "").replace(/_key$/, "");
+      const model =
+        err.meta?.modelName === "Auth"
+          ? "User"
+          : err.meta?.modelName || "Record";
+      message = field
+        ? `${model} already exists with this ${field}!`
+        : `${model} already exists!`;
+      error = err.meta;
+    } else if (err.code === "P2023") {
+      // malformed ObjectId in a path param / body
+      status = 400;
+      message = "Invalid id!";
       error = err.meta;
     } else if (err.code === "P2025") {
       status = 404;
@@ -105,16 +120,21 @@ const globalErrorHandler = (
     status = 401;
     message = err?.message;
   } else if (err.name === "MulterError") {
-    status = 400;
-    if (err.code === "LIMIT_UNEXPECTED_FILE") {
-      message = err?.message;
-      err = [
-        {
-          path: "",
-          message: err?.message,
-        },
-      ];
-    }
+    status = err.code === "LIMIT_FILE_SIZE" ? 413 : 400;
+    message = err.message || "Invalid file upload!";
+    error = [{ path: err.field ?? "", message }];
+  } else if (
+    // body-parser errors (malformed JSON 400, payload too large 413, ...)
+    Number.isInteger(err.status) &&
+    err.status >= 400 &&
+    err.status < 500
+  ) {
+    status = err.status;
+    message =
+      err.type === "entity.parse.failed"
+        ? "Malformed JSON body!"
+        : err.message || message;
+    error = { type: err.type };
   }
 
   res.status(status).json({
