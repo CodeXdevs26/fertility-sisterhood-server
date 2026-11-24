@@ -4,13 +4,17 @@ import {
   TPaginationOptions,
 } from "../../utils/paginationCalculation.js";
 import prisma from "../../utils/prisma.js";
+import { withCalendarDays } from "../../utils/userDay.js";
 import {
   TCreateAppointment,
   TUpdateAppointment,
 } from "./appointment.validation.js";
 
-const create = async (authId: string, payload: TCreateAppointment) =>
-  prisma.appointment.create({
+// `date` is the calendar day (UTC midnight; the reminder job relies on it),
+// `time` holds the time of day
+const create = async (authId: string, payload: TCreateAppointment) => {
+  payload = await withCalendarDays(authId, payload, ["date"]);
+  return prisma.appointment.create({
     data: {
       authId,
       doctor: payload.doctor,
@@ -27,6 +31,7 @@ const create = async (authId: string, payload: TCreateAppointment) =>
       createdAt: true,
     },
   });
+};
 
 const getMy = async (authId: string, options: TPaginationOptions) => {
   const { page, take, skip } = calculatePagination(options);
@@ -73,6 +78,7 @@ const update = async (
   id: string,
   payload: TUpdateAppointment
 ) => {
+  payload = await withCalendarDays(authId, payload, ["date"]);
   const appointment = await prisma.appointment.findFirst({
     where: { id, authId },
     select: { id: true },

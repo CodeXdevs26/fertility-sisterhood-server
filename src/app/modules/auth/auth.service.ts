@@ -1,12 +1,18 @@
 import {
   LoginProvider,
+  NotificationModelType,
   OTPPurpose,
   Prisma,
+  SubscriptionStatus,
   UserRole,
   UserStatus,
 } from "@prisma/client";
 import crypto from "crypto";
 import ApiError from "../../classes/ApiError.js";
+import {
+  createNotification,
+  notify,
+} from "../notification/notification.utils.js";
 import prisma from "../../utils/prisma.js";
 import { sendEmail } from "../../utils/sendEmail.js";
 import {
@@ -132,6 +138,7 @@ const login = async (payload: TLoginInput) => {
     email: auth.email,
     role: auth.role,
     id: auth.id,
+    tv: auth.tokenVersion ?? 0,
   };
 
   const accessToken = jsonwebtoken.sign(
@@ -150,16 +157,26 @@ const login = async (payload: TLoginInput) => {
     }
   );
 
-  // update fcmToken if any
-  if (payload.fcmToken) {
-    await prisma.auth.update({
-      where: {
-        email: payload.email,
-      },
-      data: {
-        fcmToken: payload.fcmToken,
-      },
-    });
+  // save the device's fcmToken / timezone. A device token belongs to one
+  // account at a time, so remove it from whoever logged in on this device before.
+  if (payload.fcmToken || payload.timezone) {
+    await prisma.$transaction([
+      ...(payload.fcmToken
+        ? [
+            prisma.auth.updateMany({
+              where: { fcmToken: payload.fcmToken, id: { not: auth.id } },
+              data: { fcmToken: null },
+            }),
+          ]
+        : []),
+      prisma.auth.update({
+        where: { id: auth.id },
+        data: {
+          ...(payload.fcmToken ? { fcmToken: payload.fcmToken } : {}),
+          ...(payload.timezone ? { timezone: payload.timezone } : {}),
+        },
+      }),
+    ]);
   }
 
   return {
@@ -217,11 +234,19 @@ const getAll = async (
     andConditions.push({ status });
   }
 
+  const activeSubscription: Prisma.AuthWhereInput = {
+    subscription: { is: { status: SubscriptionStatus.ACTIVE } },
+  };
+  const subscription = String(query.subscription || "").toLowerCase();
+  if (subscription === "premium") andConditions.push(activeSubscription);
+  else if (subscription === "free")
+    andConditions.push({ NOT: activeSubscription });
+
   const whereConditions: Prisma.AuthWhereInput =
     andConditions.length > 0 ? { AND: andConditions } : {};
 
   const { page, take, skip, sortBy, orderBy } = calculatePagination(options);
-  const auths = await prisma.auth.findMany({
+  const users = await prisma.auth.findMany({
     where: whereConditions,
     select: {
       id: true,
@@ -230,6 +255,7 @@ const getAll = async (
       role: true,
       status: true,
       createdAt: true,
+      subscription: { select: { status: true } },
     },
     skip,
     take,
@@ -239,6 +265,11 @@ const getAll = async (
   const total = await prisma.auth.count({
     where: whereConditions,
   });
+
+  const auths = users.map(({ subscription, ...user }) => ({
+    ...user,
+    isPremium: subscription?.status === SubscriptionStatus.ACTIVE,
+  }));
 
   const meta = {
     page,
@@ -259,6 +290,15 @@ const getSingle = async (id: string) => {
       name: true,
       role: true,
       status: true,
+      loginProvider: true,
+      consent: {
+        select: {
+          healthData: true,
+          healthDataUpdatedAt: true,
+          marketing: true,
+          cookies: true,
+        },
+      },
       createdAt: true,
       subscription: {
         select: {
@@ -272,7 +312,13 @@ const getSingle = async (id: string) => {
   });
   if (!auth) throw new ApiError(404, "User not found");
 
-  return auth;
+  const { loginProvider, consent, ...rest } = auth;
+  return {
+    ...rest,
+    isPremium: auth.subscription?.status === SubscriptionStatus.ACTIVE,
+    provider: loginProvider,
+    consent: consent ?? null,
+  };
 };
 
 const resetPassword = async (payload: TResetPasswordInput) => {
@@ -284,6 +330,7 @@ const resetPassword = async (payload: TResetPasswordInput) => {
     select: {
       id: true,
       name: true,
+      tokenVersion: true,
     },
   });
 
@@ -319,6 +366,8 @@ const resetPassword = async (payload: TResetPasswordInput) => {
       },
       data: {
         password: hashedPassword,
+        // log out every device: old tokens may belong to whoever knew the old password
+        tokenVersion: (auth.tokenVersion ?? 0) + 1,
       },
     });
 
@@ -330,8 +379,7 @@ const resetPassword = async (payload: TResetPasswordInput) => {
   });
 
   // send email
-  const subject =
-    "Your Player Central Password Has Been Reset 🎉 - Fertility Sisterhood";
+  const subject = "Your Password Has Been Reset - Fertility Sisterhood";
   const path = "./src/app/emailTemplates/passwordResetSuccess.html";
   const replacements = {
     name: auth.name || "there",
@@ -357,14 +405,38 @@ const changePassword = async (
 
   const hashedPassword = await bcrypt.hash(payload.newPassword, 10);
 
-  await prisma.auth.update({
+  // other devices are logged out (tokenVersion bump); this device gets new tokens
+  const updated = await prisma.auth.update({
     where: {
       id: userId,
     },
     data: {
       password: hashedPassword,
+      tokenVersion: (auth.tokenVersion ?? 0) + 1,
     },
+    select: { id: true, email: true, role: true, tokenVersion: true },
   });
+
+  const jwtPayload = {
+    email: updated.email,
+    role: updated.role,
+    id: updated.id,
+    tv: updated.tokenVersion ?? 0,
+  };
+  return {
+    accessToken: jsonwebtoken.sign(
+      jwtPayload,
+      config.jwt.accessSecret as Secret,
+      {
+        expiresIn: config.jwt.accessExpiration as any,
+      }
+    ),
+    refreshToken: jsonwebtoken.sign(
+      jwtPayload,
+      config.jwt.refreshSecret as Secret,
+      { expiresIn: config.jwt.refreshExpiration as any }
+    ),
+  };
 };
 
 const changeAccountStatus = async (userId: string, status: UserStatus) => {
@@ -376,14 +448,47 @@ const changeAccountStatus = async (userId: string, status: UserStatus) => {
   if (auth.role === UserRole.ADMIN)
     throw new ApiError(400, "Admin account cannot be changed!");
 
+  const isBlocking =
+    status === UserStatus.BLOCKED && auth.status !== UserStatus.BLOCKED;
+  const isActivating =
+    status === UserStatus.ACTIVE && auth.status !== UserStatus.ACTIVE;
+
+  // must be pushed BEFORE blocking: the update below clears the fcmToken
+  // and pushes only go to ACTIVE accounts
+  if (isBlocking) {
+    await createNotification({
+      receiverId: userId,
+      message: "Your account has been blocked",
+      description:
+        "You can no longer use Fertility Sisterhood. Please contact support if you think this is a mistake.",
+      modelType: NotificationModelType.ACCOUNT,
+    }).catch(error =>
+      console.error("Failed to send block notification:", error)
+    );
+  }
+
   await prisma.auth.update({
     where: {
       id: userId,
     },
     data: {
       status: status,
+      // blocked / deleted accounts must not receive pushes, and lose every
+      // issued token at once
+      ...(status !== UserStatus.ACTIVE
+        ? { fcmToken: null, tokenVersion: (auth.tokenVersion ?? 0) + 1 }
+        : {}),
     },
   });
+
+  if (isActivating) {
+    notify({
+      receiverId: userId,
+      message: "Your account has been activated",
+      description: "Welcome back! You can use Fertility Sisterhood again.",
+      modelType: NotificationModelType.ACCOUNT,
+    });
+  }
 
   const message =
     status === UserStatus.ACTIVE
@@ -401,21 +506,31 @@ const refreshToken = async (token: string) => {
   const decodedUser = jwt.verify(token, config.jwt.refreshSecret as Secret);
   if (!decodedUser) throw new ApiError(401, "Unauthorized!");
 
-  const user = await prisma.auth.findUniqueOrThrow({
+  // blocked / deleted accounts must not keep minting access tokens
+  const user = await prisma.auth.findFirst({
     where: {
       id: (decodedUser as TAuthUser).id,
+      status: UserStatus.ACTIVE,
     },
     select: {
       id: true,
       email: true,
       role: true,
+      tokenVersion: true,
     },
   });
+  // a password change / reset or block bumps tokenVersion: old refresh tokens die
+  if (
+    !user ||
+    (user.tokenVersion ?? 0) !== ((decodedUser as TAuthUser).tv ?? 0)
+  )
+    throw new ApiError(401, "Unauthorized!");
 
   const jwtPayload = {
     email: user.email,
     role: user.role,
     id: user.id,
+    tv: user.tokenVersion ?? 0,
   };
 
   const accessToken = jwt.sign(jwtPayload, config.jwt.accessSecret as Secret, {
@@ -425,7 +540,16 @@ const refreshToken = async (token: string) => {
   return { accessToken };
 };
 
+const logout = async (userId: string) => {
+  // stop push notifications to this device
+  await prisma.auth.updateMany({
+    where: { id: userId },
+    data: { fcmToken: null },
+  });
+};
+
 export const authServices = {
+  logout,
   signUp,
   login,
   getSingle,

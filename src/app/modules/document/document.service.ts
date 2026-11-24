@@ -1,7 +1,7 @@
 import ApiError from "../../classes/ApiError.js";
 import { TFile } from "../../interface/file.interface.js";
 import { getDayBounds } from "../../utils/getDayBounds.js";
-import { deleteFromS3, uploadToS3 } from "../../utils/awss3.js";
+import { safeDeleteFromS3, uploadToS3 } from "../../utils/awss3.js";
 import {
   calculatePagination,
   TPaginationOptions,
@@ -16,15 +16,20 @@ const create = async (
 ) => {
   if (!file) throw new ApiError(400, "File is required");
   const fileUrl = await uploadToS3(file);
-  return prisma.document.create({
-    data: {
-      authId,
-      file: fileUrl,
-      date: payload.date ?? new Date(),
-      note: payload.note,
-    },
-    select: { id: true, date: true, note: true, file: true },
-  });
+  try {
+    return await prisma.document.create({
+      data: {
+        authId,
+        file: fileUrl,
+        date: payload.date ?? new Date(),
+        note: payload.note,
+      },
+      select: { id: true, date: true, note: true, file: true },
+    });
+  } catch (error) {
+    await safeDeleteFromS3(fileUrl); // don't orphan the upload
+    throw error;
+  }
 };
 
 const getMy = async (
@@ -63,12 +68,18 @@ const update = async (
   if (!document) throw new ApiError(404, "Document not found");
 
   const newFileUrl = file ? await uploadToS3(file) : undefined;
-  const updated = await prisma.document.update({
-    where: { id },
-    data: { ...payload, ...(newFileUrl ? { file: newFileUrl } : {}) },
-    select: { id: true, date: true, note: true, file: true },
-  });
-  if (newFileUrl) await deleteFromS3(document.file);
+  let updated;
+  try {
+    updated = await prisma.document.update({
+      where: { id },
+      data: { ...payload, ...(newFileUrl ? { file: newFileUrl } : {}) },
+      select: { id: true, date: true, note: true, file: true },
+    });
+  } catch (error) {
+    await safeDeleteFromS3(newFileUrl); // don't orphan the new upload
+    throw error;
+  }
+  if (newFileUrl) await safeDeleteFromS3(document.file);
   return updated;
 };
 
@@ -79,7 +90,7 @@ const remove = async (authId: string, id: string) => {
   });
   if (!document) throw new ApiError(404, "Document not found");
   await prisma.document.delete({ where: { id } });
-  await deleteFromS3(document.file);
+  await safeDeleteFromS3(document.file);
   return { id: document.id, date: document.date, note: document.note };
 };
 

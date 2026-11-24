@@ -12,3 +12,4 @@ export const photoQueryZod = z.object({
 });
 
 export type TCreatePhoto = z.infer<typeof createPhotoZod>;
+export type TPhotoQuery = z.infer<typeof photoQueryZod>;

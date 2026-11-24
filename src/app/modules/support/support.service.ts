@@ -1,5 +1,6 @@
-import { Prisma, SupportStatus } from "@prisma/client";
+import { NotificationModelType, Prisma, SupportStatus } from "@prisma/client";
 import ApiError from "../../classes/ApiError.js";
+import { notify, notifyAdmins } from "../notification/notification.utils.js";
 import {
   calculatePagination,
   TPaginationOptions,
@@ -7,9 +8,9 @@ import {
 import prisma from "../../utils/prisma.js";
 import { TSendSupport } from "./support.validation.js";
 
-const send = async (authId: string, payload: TSendSupport) =>
-  prisma.support.create({
-    data: { authId, ...payload },
+const send = async (authId: string, payload: TSendSupport) => {
+  const support = await prisma.support.create({
+    data: { authId, title: payload.title, description: payload.description },
     select: {
       id: true,
       title: true,
@@ -18,6 +19,23 @@ const send = async (authId: string, payload: TSendSupport) =>
       createdAt: true,
     },
   });
+
+  // T5: in-app only for admins (no push)
+  prisma.auth
+    .findUnique({ where: { id: authId }, select: { name: true } })
+    .then(sender =>
+      notifyAdmins({
+        message: "New support message",
+        description: `${sender?.name ?? "A user"} sent: "${support.title}"`,
+        modelType: NotificationModelType.NEW_SUPPORT,
+        referenceId: support.id,
+        dedupeKey: `admin-support:${support.id}`,
+      })
+    )
+    .catch(error => console.error("Failed to notify admins:", error));
+
+  return support;
+};
 
 const getAll = async (options: TPaginationOptions, searchTerm?: string) => {
   const { page, take, skip } = calculatePagination(options);
@@ -80,10 +98,10 @@ const getSingle = async (id: string) => {
 const updateStatus = async (id: string, status: SupportStatus) => {
   const support = await prisma.support.findUnique({
     where: { id },
-    select: { id: true },
+    select: { id: true, authId: true, status: true },
   });
   if (!support) throw new ApiError(404, "Support request not found");
-  return prisma.support.update({
+  const updated = await prisma.support.update({
     where: { id },
     data: { status },
     select: {
@@ -94,6 +112,24 @@ const updateStatus = async (id: string, status: SupportStatus) => {
       createdAt: true,
     },
   });
+
+  // T4: tell the user only when it actually moves PENDING -> RESOLVED
+  if (
+    support.authId &&
+    support.status === SupportStatus.PENDING &&
+    status === SupportStatus.RESOLVED
+  ) {
+    notify({
+      receiverId: support.authId,
+      message: "Your support request has been resolved",
+      description: updated.title,
+      modelType: NotificationModelType.SUPPORT,
+      referenceId: support.id,
+      dedupeKey: `support-resolved:${support.id}`,
+    });
+  }
+
+  return updated;
 };
 
 export const supportServices = { send, getAll, getSingle, updateStatus };

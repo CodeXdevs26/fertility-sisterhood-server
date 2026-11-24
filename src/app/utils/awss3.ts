@@ -8,17 +8,29 @@ import multer, { memoryStorage } from "multer";
 import ApiError from "../classes/ApiError.js";
 import { TFile } from "../interface/file.interface.js";
 
+const { accessKeyId, secretAccessKey } = config.aws;
+
+if (!accessKeyId || !secretAccessKey) {
+  console.warn(
+    "S3_BUCKET_ACCESS_KEY / S3_BUCKET_SECRET_ACCESS_KEY not set; falling back to the AWS default credential chain (env, IAM role)"
+  );
+}
+
 export const s3Client = new S3Client({
-  // endpoint: config.aws.endpoint as string,
-  region: `${config.aws.region}`,
-  credentials: {
-    accessKeyId: `${config.aws.accessKeyId}`,
-    secretAccessKey: `${config.aws.secretAccessKey}`,
-  },
+  region: config.aws.region,
+  // explicit keys when set; otherwise the SDK default chain, so an IAM role works
+  // instead of sending the literal string "undefined" as a key
+  ...(accessKeyId && secretAccessKey
+    ? { credentials: { accessKeyId, secretAccessKey } }
+    : {}),
 });
+
+// files are buffered in memory before going to S3: always cap the size
+const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
 export const upload = multer({
   storage: memoryStorage(),
+  limits: { fileSize: MAX_FILE_SIZE },
 });
 
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -77,4 +89,17 @@ export const deleteFromS3 = async (url: string) => {
     Key: key,
   });
   await s3Client.send(command);
+};
+
+/**
+ * Best-effort delete for cleanup after the DB change already succeeded:
+ * a missing/foreign URL or S3 hiccup must not fail the request.
+ */
+export const safeDeleteFromS3 = async (fileUrl?: string | null) => {
+  if (!fileUrl) return;
+  try {
+    await deleteFromS3(fileUrl);
+  } catch (error) {
+    console.error(`Failed to delete S3 file ${fileUrl}:`, error);
+  }
 };

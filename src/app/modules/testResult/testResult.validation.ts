@@ -14,3 +14,4 @@ export const testResultQueryZod = z.object({
 });
 export type TCreateTestResult = z.infer<typeof createTestResultZod>;
 export type TUpdateTestResult = z.infer<typeof updateTestResultZod>;
+export type TTestResultQuery = z.infer<typeof testResultQueryZod>;

@@ -4,14 +4,22 @@ import {
   TPaginationOptions,
 } from "../../utils/paginationCalculation.js";
 import prisma from "../../utils/prisma.js";
-import { getDayBounds } from "../../utils/getDayBounds.js";
+import {
+  getUserTimeZone,
+  getUserToday,
+  sameDayWhere,
+  toCalendarDay,
+} from "../../utils/userDay.js";
 import { TCreateSymptom, TUpdateSymptom } from "./symptom.validation.js";
 
 const create = async (authId: string, payload: TCreateSymptom) => {
-  const date = payload.date ?? new Date();
-  const dateRange = getDayBounds(date);
+  // one symptom per calendar day in the user's timezone, stored at UTC midnight
+  const timeZone = await getUserTimeZone(authId);
+  const date = payload.date
+    ? toCalendarDay(payload.date, timeZone)
+    : getUserToday(timeZone).day;
   const existing = await prisma.symptom.findFirst({
-    where: { authId, date: dateRange },
+    where: { authId, OR: sameDayWhere(date, timeZone) },
     select: { id: true },
   });
   if (existing)
@@ -57,9 +65,10 @@ const getMy = async (authId: string, options: TPaginationOptions) => {
   return { meta: { page, limit: take, total }, symptoms };
 };
 
-const getToday = async (authId: string) =>
-  prisma.symptom.findFirst({
-    where: { authId, date: getDayBounds(new Date()) },
+const getToday = async (authId: string) => {
+  const timeZone = await getUserTimeZone(authId);
+  return prisma.symptom.findFirst({
+    where: { authId, OR: sameDayWhere(getUserToday(timeZone).day, timeZone) },
     orderBy: { date: "desc" },
     select: {
       id: true,
@@ -69,6 +78,7 @@ const getToday = async (authId: string) =>
       date: true,
     },
   });
+};
 
 const update = async (authId: string, id: string, payload: TUpdateSymptom) => {
   const symptom = await prisma.symptom.findFirst({
@@ -77,9 +87,12 @@ const update = async (authId: string, id: string, payload: TUpdateSymptom) => {
   });
   if (!symptom) throw new ApiError(404, "Symptom not found");
 
+  let date: Date | undefined;
   if (payload.date) {
+    const timeZone = await getUserTimeZone(authId);
+    date = toCalendarDay(payload.date, timeZone);
     const existing = await prisma.symptom.findFirst({
-      where: { authId, id: { not: id }, date: getDayBounds(payload.date) },
+      where: { authId, id: { not: id }, OR: sameDayWhere(date, timeZone) },
       select: { id: true },
     });
     if (existing)
@@ -91,7 +104,7 @@ const update = async (authId: string, id: string, payload: TUpdateSymptom) => {
 
   return prisma.symptom.update({
     where: { id },
-    data: payload,
+    data: { ...payload, ...(date ? { date } : {}) },
     select: {
       id: true,
       symptomName: true,

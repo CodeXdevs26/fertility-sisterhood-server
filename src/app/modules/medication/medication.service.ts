@@ -3,7 +3,12 @@ import {
   calculatePagination,
   TPaginationOptions,
 } from "../../utils/paginationCalculation.js";
-import { getDayBounds } from "../../utils/getDayBounds.js";
+import { assertDateRange } from "../../utils/getDayBounds.js";
+import {
+  getUserTimeZone,
+  getUserToday,
+  withCalendarDays,
+} from "../../utils/userDay.js";
 import prisma from "../../utils/prisma.js";
 import {
   TCreateMedication,
@@ -19,27 +24,31 @@ const medicationSelect = {
   startDate: true,
   endDate: true,
   reminderTimes: true,
-  timezone: true,
   createdAt: true,
 } as const;
 
-// Remove duplicate times and keep them in chronological order
+/** Removes duplicate times and sorts them ("20:00", "08:00", "08:00" -> ["08:00", "20:00"]). */
 const normalizeReminderTimes = (times: string[]) => [...new Set(times)].sort();
 
-const create = async (authId: string, payload: TCreateMedication) =>
-  prisma.medication.create({
+const create = async (authId: string, payload: TCreateMedication) => {
+  // course days are calendar days at UTC midnight (the reminder job relies on it)
+  payload = await withCalendarDays(authId, payload, ["startDate", "endDate"]);
+  assertDateRange(payload.startDate, payload.endDate);
+  return prisma.medication.create({
     data: {
-      authId,
       ...payload,
-      reminderTimes: normalizeReminderTimes(payload.reminderTimes),
+      authId,
+      reminderTimes: normalizeReminderTimes(payload.reminderTimes ?? []),
     },
     select: medicationSelect,
   });
+};
 
 const getMy = async (authId: string, options: TPaginationOptions) => {
   const { page, take, skip } = calculatePagination(options);
   const where = { authId };
-  const today = getDayBounds(new Date());
+  // intake rows hold the moment a dose was marked: match the user's local day
+  const today = getUserToday(await getUserTimeZone(authId)).instantRange;
   const [medications, total] = await Promise.all([
     prisma.medication.findMany({
       where,
@@ -77,7 +86,7 @@ const markTakenToday = async (authId: string, id: string) => {
   });
   if (!medication) throw new ApiError(404, "Medication not found");
 
-  const date = getDayBounds(new Date());
+  const date = getUserToday(await getUserTimeZone(authId)).instantRange;
   const existingChecklist = await prisma.medicationChecklist.findFirst({
     where: { medicationId: id, date },
     select: { id: true, medicationId: true, date: true },
@@ -104,19 +113,24 @@ const update = async (
   id: string,
   payload: TUpdateMedication
 ) => {
+  payload = await withCalendarDays(authId, payload, ["startDate", "endDate"]);
   const medication = await prisma.medication.findFirst({
     where: { id, authId },
-    select: { id: true },
+    select: { id: true, startDate: true, endDate: true },
   });
   if (!medication) throw new ApiError(404, "Medication not found");
+  assertDateRange(
+    payload.startDate ?? medication.startDate,
+    payload.endDate ?? medication.endDate
+  );
 
   return prisma.medication.update({
     where: { id },
     data: {
       ...payload,
-      ...(payload.reminderTimes && {
-        reminderTimes: normalizeReminderTimes(payload.reminderTimes),
-      }),
+      ...(payload.reminderTimes
+        ? { reminderTimes: normalizeReminderTimes(payload.reminderTimes) }
+        : {}),
     },
     select: medicationSelect,
   });

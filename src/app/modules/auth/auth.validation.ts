@@ -10,10 +10,30 @@ export const userSignupZod = z.object({
 
 export type TSignup = z.infer<typeof userSignupZod>;
 
+const isValidTimezone = (timeZone: string) => {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const timezoneZod = z
+  .string()
+  .refine(isValidTimezone, "timezone must be a valid IANA timezone!");
+
+// an existing password is only checked for presence; the complexity policy
+// applies to new passwords (otherwise e.g. a seeded admin could never log in)
+const existingPasswordZod = z
+  .string({ message: "Password is required" })
+  .min(1, "Password is required");
+
 export const loginZodSchema = z.object({
   email: emailZod,
-  password: passwordZod,
-  fcmToken: z.string().optional(),
+  password: existingPasswordZod,
+  fcmToken: z.string().trim().min(1).optional(),
+  timezone: timezoneZod.optional(),
   isMobileApp: z.boolean().default(false),
 });
 
@@ -38,7 +58,7 @@ export const resetPasswordZod = z.object({
 export type TResetPasswordInput = z.infer<typeof resetPasswordZod>;
 
 export const changePasswordZod = z.object({
-  oldPassword: passwordZod,
+  oldPassword: existingPasswordZod,
   newPassword: passwordZod,
 });
 

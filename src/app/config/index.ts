@@ -5,7 +5,9 @@ dotenv.config({ path: path.join(process.cwd(), ".env") });
 
 export default {
   env: process.env.NODE_ENV,
-  port: process.env.PORT,
+  port: Number(process.env.PORT) || 5004,
+  // Express "trust proxy" value: which proxy addresses may set X-Forwarded-For
+  trustProxy: process.env.TRUST_PROXY || "loopback",
   email: {
     emailSendingApi: process.env.SEND_EMAIL_URL,
   },
@@ -27,16 +29,20 @@ export default {
     region: process.env.AWS_REGION,
     bucket: process.env.AWS_BUCKET_NAME,
   },
-  stripe: {
-    secretKey: process.env.STRIPE_SECRET_KEY,
-    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
-    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+  revenueCat: {
+    // secret (v1) REST API key, used to read subscriber state
+    apiKey: process.env.REVENUECAT_API_KEY,
+    // value RevenueCat sends in the webhook Authorization header
+    webhookSecret: process.env.REVENUECAT_WEBHOOK_SECRET,
+    // POST /subscriptions/test-purchase grants free Premium: opt-in only, and
+    // never in production (a missing NODE_ENV must not enable it)
+    enableTestPurchase:
+      process.env.ENABLE_TEST_PURCHASE === "true" &&
+      process.env.NODE_ENV !== "production",
   },
   firebase: {
     projectId: process.env.FIREBASE_PROJECT_ID,
     clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
     privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
   },
-  // Set to "false" on extra server instances so reminders are not sent twice
-  enableCron: process.env.ENABLE_CRON !== "false",
 };

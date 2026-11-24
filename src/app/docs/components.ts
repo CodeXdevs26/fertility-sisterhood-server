@@ -7,16 +7,8 @@ export const ENUMS = {
   UserRole: ["ADMIN", "USER"],
   UserStatus: ["PENDING", "ACTIVE", "BLOCKED", "DELETED"],
   OTPPurpose: ["VERIFY_ACCOUNT", "RESET_PASSWORD"],
-  SubscriptionStatus: [
-    "INCOMPLETE",
-    "INCOMPLETE_EXPIRED",
-    "TRIALING",
-    "ACTIVE",
-    "PAST_DUE",
-    "CANCELED",
-    "UNPAID",
-    "PAUSED",
-  ],
+  SubscriptionStatus: ["ACTIVE", "BILLING_ISSUE", "CANCELLED", "EXPIRED"],
+  BillingCycle: ["MONTHLY", "ANNUAL"],
   SupportStatus: ["PENDING", "RESOLVED"],
   PhotoMilestone: [
     "CONSULTATION",
@@ -67,9 +59,25 @@ export const ENUMS = {
     "HEADACHE",
     "NAUSEA",
     "BREAST_TENDERNESS",
-    "CAMPING",
+    "CRAMPING",
     "OTHER",
   ],
+  NotificationModelType: [
+    "ACCOUNT",
+    "SUBSCRIPTION",
+    "SUPPORT",
+    "APPOINTMENT",
+    "DIGEST",
+    "MEDICATION",
+    "SYSTEM",
+    "NEW_USER",
+    "NEW_SUBSCRIPTION",
+    "SUBSCRIPTION_CANCELED",
+    "PAYMENT_FAILED",
+    "NEW_SUPPORT",
+  ],
+  LoginProvider: ["FACEBOOK", "GOOGLE", "EMAIL"],
+  PaymentStatus: ["SUCCEEDED", "FAILED", "REFUNDED"],
 } as const;
 
 const enumSchemas = Object.fromEntries(
@@ -124,7 +132,15 @@ export const components = {
       "Validation error (zod / prisma)",
       "Validation error!"
     ),
+    Error429: errorResponse(
+      "Rate limit exceeded (auth: 20, OTP: 10 requests per 15 minutes per IP; OTP resend: once a minute)",
+      "Too many attempts, please try again later!"
+    ),
     Error500: errorResponse("Unexpected server error", "Something went wrong!"),
+    Error502: errorResponse(
+      "Upstream service (RevenueCat) failed",
+      "RevenueCat request failed"
+    ),
   },
   schemas: {
     ...enumSchemas,
@@ -145,6 +161,121 @@ export const components = {
         role: ref("UserRole"),
         status: ref("UserStatus"),
         createdAt: date,
+        isPremium: {
+          type: "boolean",
+          example: false,
+          description: "Subscription status is ACTIVE",
+        },
+      },
+    },
+    Consent: {
+      type: "object",
+      nullable: true,
+      description:
+        '"Your consent matters" choices. `null` until the user answers.',
+      properties: {
+        healthData: {
+          type: "boolean",
+          example: true,
+          description: "Explicit consent to process health data (UK GDPR)",
+        },
+        healthDataUpdatedAt: {
+          ...date,
+          description: "When healthData was last given or withdrawn",
+        },
+        marketing: { type: "boolean", example: false },
+        cookies: { type: "boolean", example: true },
+      },
+    },
+    Payment: {
+      type: "object",
+      properties: {
+        id,
+        amount: {
+          type: "number",
+          example: 9.99,
+          description: "In the purchase `currency`",
+        },
+        amountRefunded: { type: "number", example: 0 },
+        currency: { type: "string", example: "gbp" },
+        amountGbp: {
+          type: "number",
+          nullable: true,
+          example: 9.99,
+          description:
+            "Converted to GBP (the reporting currency); `null` if the currency could not be converted",
+        },
+        amountRefundedGbp: { type: "number", nullable: true, example: 0 },
+        status: ref("PaymentStatus"),
+        store: {
+          type: "string",
+          nullable: true,
+          example: "APP_STORE",
+          description:
+            "RevenueCat store (APP_STORE, PLAY_STORE, ...), `TEST_API` for test purchases, `STRIPE` for old records",
+        },
+        productId: {
+          type: "string",
+          nullable: true,
+          example: "premium_monthly",
+        },
+        environment: {
+          type: "string",
+          nullable: true,
+          enum: ["SANDBOX", "PRODUCTION"],
+          description: "Sandbox payments are excluded from revenue stats",
+        },
+        createdAt: {
+          ...date,
+          description: "When the transaction was purchased",
+        },
+        auth: {
+          type: "object",
+          nullable: true,
+          properties: {
+            id,
+            name: { type: "string", example: "Jane Doe" },
+            email: { type: "string", example: "jane@example.com" },
+          },
+        },
+      },
+    },
+    AppSetting: {
+      type: "object",
+      properties: {
+        supportEmail: { type: "string", example: "support@example.com" },
+        supportPhone: { type: "string", example: "+44 20 1234 5678" },
+        communityLink: {
+          type: "string",
+          example: "https://chat.whatsapp.com/abc123",
+        },
+        updatedAt: date,
+      },
+    },
+    Quote: {
+      type: "object",
+      properties: {
+        id,
+        text: {
+          type: "string",
+          example: "Believe in the power of your body.",
+        },
+        author: { type: "string", nullable: true, example: null },
+        isActive: { type: "boolean", example: true },
+        createdAt: date,
+      },
+    },
+    ChecklistTemplateItem: {
+      type: "object",
+      properties: {
+        id,
+        category: ref("ChecklistCategory"),
+        title: {
+          type: "string",
+          example: "Book initial fertility consultation",
+        },
+        order: { type: "integer", example: 1 },
+        createdAt: date,
       },
     },
     Profile: {
@@ -157,6 +288,8 @@ export const components = {
         status: ref("UserStatus"),
         createdAt: date,
         updatedAt: date,
+        provider: ref("LoginProvider"),
+        consent: ref("Consent"),
         isPremiumUser: { type: "boolean", example: false },
       },
     },
@@ -178,6 +311,44 @@ export const components = {
         moods: { type: "array", items: ref("Mood") },
         note: { type: "string", nullable: true },
         date,
+      },
+    },
+    Notification: {
+      type: "object",
+      properties: {
+        id,
+        message: { type: "string", example: "Appointment tomorrow" },
+        description: {
+          type: "string",
+          nullable: true,
+          example: "Dr. Smith at 10:30 AM",
+        },
+        modelType: ref("NotificationModelType"),
+        referenceId: {
+          ...id,
+          nullable: true,
+          description:
+            "Id of the related record for deep-linking (appointment, medication, subscription, support). Admin notifications about a user (new user, subscription, payment failed) carry the user id.",
+        },
+        read: { type: "boolean", example: false },
+        pushed: {
+          type: "boolean",
+          example: true,
+          description: "Whether the FCM push was accepted",
+        },
+        createdAt: date,
+      },
+    },
+    Cycle: {
+      type: "object",
+      properties: {
+        id,
+        startDate: date,
+        cyclePeriod: { type: "integer", nullable: true, example: 10 },
+        endDate: { ...date, nullable: true },
+        cycleNumber: { type: "integer", example: 1 },
+        createdAt: date,
+        updatedAt: date,
       },
     },
     Appointment: {
@@ -203,10 +374,11 @@ export const components = {
         endDate: date,
         reminderTimes: {
           type: "array",
-          items: { type: "string" },
+          items: { type: "string", example: "08:00" },
           example: ["08:00", "20:00"],
+          description:
+            "Local times (HH:mm, 24h, user's timezone) for push reminders; sorted, no duplicates",
         },
-        timezone: { type: "string", example: "Europe/London" },
         createdAt: date,
       },
     },
@@ -371,37 +543,68 @@ export const components = {
         createdAt: date,
       },
     },
-    SubscriptionPlan: {
+    Package: {
       type: "object",
       properties: {
         id,
-        title: { type: "string", example: "Premium" },
-        description: { type: "string" },
-        price: { type: "number", example: 9.99, description: "EUR per month" },
+        title: { type: "string", example: "Premium Monthly" },
+        billingCycle: ref("BillingCycle"),
+        revenueCatProductId: { type: "string", example: "premium_monthly" },
+        entitlementId: { type: "string", example: "premium" },
+        description: {
+          type: "array",
+          items: { type: "string" },
+          example: ["All trackers", "Morning digest"],
+        },
+        price: { type: "number", example: 9.99 },
+        currency: {
+          type: "string",
+          example: "gbp",
+          description: "ISO currency code of price (lowercase)",
+        },
+        isDeleted: { type: "boolean", example: false },
+        createdAt: date,
         updatedAt: date,
       },
     },
     MySubscription: {
       type: "object",
       nullable: true,
-      description: "`null` when the user never started a subscription.",
+      description: "`null` when the user never had a subscription.",
       properties: {
         status: ref("SubscriptionStatus"),
-        isPremium: { type: "boolean" },
-        autoRenew: { type: "boolean" },
-        endDate: { ...date, nullable: true },
+        isPremium: { type: "boolean", description: "status is `ACTIVE`" },
+        autoRenew: {
+          type: "boolean",
+          description: "`false` once auto-renew is turned off in the store",
+        },
+        endDate: {
+          ...date,
+          nullable: true,
+          description: "Current period end; `null` for lifetime",
+        },
+        store: {
+          type: "string",
+          nullable: true,
+          example: "APP_STORE",
+          description: "`TEST_API` for test purchases",
+        },
+        managementUrl: {
+          type: "string",
+          nullable: true,
+          example: "https://apps.apple.com/account/subscriptions",
+          description: "Open this to cancel or change the plan in the store",
+        },
+        package: {
+          type: "object",
+          nullable: true,
+          properties: {
+            id,
+            title: { type: "string", example: "Premium Monthly" },
+            billingCycle: ref("BillingCycle"),
+          },
+        },
         createdAt: date,
-      },
-    },
-    PurchaseResult: {
-      type: "object",
-      description: "Values needed by the Stripe PaymentSheet on the client.",
-      properties: {
-        subscriptionId: { type: "string", example: "sub_1Pxxxx" },
-        clientSecret: { type: "string", example: "pi_xxx_secret_xxx" },
-        ephemeralKey: { type: "string", example: "ek_test_xxx" },
-        customerId: { type: "string", example: "cus_xxx" },
-        publishableKey: { type: "string", example: "pk_test_xxx" },
       },
     },
   },

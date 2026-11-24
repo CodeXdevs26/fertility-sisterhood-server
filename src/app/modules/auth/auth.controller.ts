@@ -5,6 +5,22 @@ import { authServices } from "./auth.service.js";
 import config from "../../config/index.js";
 import { TRequest } from "../../interface/global.interface.js";
 import pick from "../../utils/pick.js";
+import { TLoginInput } from "./auth.validation.js";
+
+// name kept for existing clients (documented in Swagger)
+export const REFRESH_COOKIE = "player-centralRefreshToken";
+
+const setRefreshCookie = (res: Response, refreshToken: string) => {
+  res.cookie(REFRESH_COOKIE, refreshToken, {
+    httpOnly: true,
+    secure: config.env === "production",
+    maxAge: 45 * 24 * 60 * 60 * 1000,
+    // CORS allows every origin, so the cookie must not be sent on cross-site
+    // requests (else any site could read GET /auth/refresh-token). Works when
+    // the dashboard and the API share a site (admin.x.com + api.x.com).
+    sameSite: "lax",
+  });
+};
 
 const signup = handleAsyncRequest(async (req: TRequest, res) => {
   const result = await authServices.signUp(req.body);
@@ -19,22 +35,16 @@ const signup = handleAsyncRequest(async (req: TRequest, res) => {
 const login = handleAsyncRequest(async (req: Request, res: Response) => {
   const result = await authServices.login(req.body);
 
-  // set up cookie
-  const day = 24 * 60 * 60 * 1000;
   const { refreshToken, accessToken } = result;
-  const cookieOptions: any = {
-    httpOnly: true,
-    secure: config.env === "production", // Use secure in production
-    maxAge: 45 * day,
-  };
-
-  if (config.env === "production") cookieOptions.sameSite = "none";
-
-  res.cookie("player-centralRefreshToken", refreshToken, cookieOptions);
+  setRefreshCookie(res, refreshToken);
 
   sendResponse(res, {
     message: "Logged in successfully!",
-    data: { accessToken },
+    // mobile apps have no cookie jar: they get the refresh token in the body
+    // and send it back in the `x-refresh-token` header
+    data: (req.body as TLoginInput).isMobileApp
+      ? { accessToken, refreshToken }
+      : { accessToken },
   });
 });
 
@@ -67,13 +77,18 @@ const resetPassword = handleAsyncRequest(
 
 const changePassword = handleAsyncRequest(
   async (req: TRequest, res: Response) => {
-    const result = await authServices.changePassword(
+    // every other device is logged out; this one gets fresh tokens
+    const { accessToken, refreshToken } = await authServices.changePassword(
       req.body,
       req.user?.id as string
     );
+    setRefreshCookie(res, refreshToken);
     sendResponse(res, {
       message: "Password changed successfully!",
-      data: result,
+      // mobile clients (refresh token in a header) need the new one in the body
+      data: req.headers["x-refresh-token"]
+        ? { accessToken, refreshToken }
+        : { accessToken },
     });
   }
 );
@@ -93,7 +108,10 @@ const changeAccountStatus = handleAsyncRequest(
 
 const refreshToken = handleAsyncRequest(
   async (req: TRequest, res: Response) => {
-    const token = req.cookies["player-centralRefreshToken"];
+    const header = req.headers["x-refresh-token"];
+    const token =
+      req.cookies?.[REFRESH_COOKIE] ??
+      (typeof header === "string" ? header : undefined);
     const result = await authServices.refreshToken(token);
     sendResponse(res, {
       message: "Token refreshed successfully!",
@@ -102,8 +120,9 @@ const refreshToken = handleAsyncRequest(
   }
 );
 
-const logout = handleAsyncRequest(async (_req: Request, res: Response) => {
-  res.clearCookie("player-centralRefreshToken", { httpOnly: true });
+const logout = handleAsyncRequest(async (req: TRequest, res: Response) => {
+  await authServices.logout(req.user!.id);
+  res.clearCookie(REFRESH_COOKIE, { httpOnly: true });
   sendResponse(res, {
     message: "Logged out successfully!",
     data: null,

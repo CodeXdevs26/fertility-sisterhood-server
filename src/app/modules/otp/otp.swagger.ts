@@ -40,7 +40,7 @@ export const otpSwagger = {
           },
         },
         responses: ok("OTP sent successfully!"),
-        errors: [404],
+        errors: [400, 403, 404, 429],
       }),
     },
     "/otp/verify": {
@@ -73,7 +73,7 @@ export const otpSwagger = {
             resetToken: { type: "string", example: "a3f5c9..." },
           },
         }),
-        errors: [400, 404],
+        errors: [400, 403, 404, 429],
       }),
     },
   },

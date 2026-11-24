@@ -8,33 +8,49 @@ datasource db {
 }
 
 model Auth {
-  id            String         @id @default(auto()) @map("_id") @db.ObjectId
-  email         String         @unique
-  password      String
-  name          String
-  role          UserRole
-  status        UserStatus     @default(PENDING)
-  loginProvider LoginProvider
-  fcmToken      String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  otp           OTP?
-  notifications Notification[]
-  symptoms      Symptom[]
-  appointments  Appointment[]
-  medications   Medication[]
-  supplements   Supplement[]
-  journals      Journal[]
-  checklists    Checklist[]
-  costs         Cost[]
-  cycles        Cycle[]
-  testResults   TestResult[]
-  notes         Note[]
-  questions     Question[]
-  documents     Document[]
-  photos        Photo[]
-  subscription  Subscription?
-  supports      Support[]
+  id                String         @id @default(auto()) @map("_id") @db.ObjectId
+  email             String         @unique
+  password          String
+  name              String
+  role              UserRole
+  status            UserStatus     @default(PENDING)
+  loginProvider     LoginProvider
+  fcmToken          String?
+  timezone          String?
+  /// bumped on password change/reset, block and delete: revokes every issued token
+  tokenVersion      Int?
+  /// set once the admin checklist templates were copied to this user
+  checklistSeededAt DateTime?
+  consent           Consent?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  otp               OTP?
+  notifications     Notification[]
+  symptoms          Symptom[]
+  appointments      Appointment[]
+  medications       Medication[]
+  supplements       Supplement[]
+  journals          Journal[]
+  checklists        Checklist[]
+  costs             Cost[]
+  cycles            Cycle[]
+  testResults       TestResult[]
+  notes             Note[]
+  questions         Question[]
+  documents         Document[]
+  photos            Photo[]
+  subscription      Subscription?
+  supports          Support[]
+  payments          Payment[]
+}
+
+/// Choices from the app's "Your consent matters" screen (UK GDPR).
+type Consent {
+  healthData          Boolean
+  healthDataUpdatedAt DateTime
+  marketing           Boolean
+  cookies             Boolean
+  updatedAt           DateTime
 }
 
 model OTP {
@@ -85,8 +101,7 @@ model Medication {
   type                 String
   startDate            DateTime
   endDate              DateTime
-  reminderTimes        String[] // "HH:mm" (24h) in the medication's timezone
-  timezone             String                @default("Europe/London") // IANA timezone
+  reminderTimes        String[] // "HH:mm" (24h) in the user's local timezone; push at each time
   createdAt            DateTime              @default(now())
   medicationChecklists MedicationChecklist[]
 }
@@ -155,11 +170,16 @@ model Cost {
 }
 
 model Cycle {
-  id     String   @id @default(auto()) @map("_id") @db.ObjectId
-  authId String   @db.ObjectId
-  auth   Auth     @relation(fields: [authId], references: [id])
-  date   DateTime
-  number Int
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  authId      String    @db.ObjectId
+  auth        Auth      @relation(fields: [authId], references: [id])
+  startDate   DateTime // UTC midnight of the first day
+  cyclePeriod Int? // length in days; null = ongoing
+  endDate     DateTime? // UTC midnight of the last day (inclusive); null = ongoing
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([authId, startDate])
 }
 
 model TestResult {
@@ -216,13 +236,36 @@ model Note {
 }
 
 model Notification {
-  id      String   @id @default(auto()) @map("_id") @db.ObjectId
-  authId  String   @db.ObjectId
-  auth    Auth     @relation(fields: [authId], references: [id])
-  title   String
-  message String
-  seen    Boolean  @default(false)
-  sentAt  DateTime @default(now())
+  id          String                @id @default(auto()) @map("_id") @db.ObjectId
+  receiverId  String                @db.ObjectId
+  receiver    Auth                  @relation(fields: [receiverId], references: [id], onDelete: Cascade)
+  message     String
+  description String?
+  modelType   NotificationModelType
+  referenceId String?               @db.ObjectId
+  read        Boolean               @default(false)
+  pushed      Boolean               @default(false)
+  dedupeKey   String                @unique @default(uuid()) // fixed key for de-duplication; random when not needed
+  createdAt   DateTime              @default(now())
+
+  @@index([receiverId, read, createdAt])
+  @@map("notifications")
+}
+
+enum NotificationModelType {
+  ACCOUNT
+  SUBSCRIPTION
+  SUPPORT
+  APPOINTMENT
+  DIGEST
+  MEDICATION
+  SYSTEM
+  // admin-only types
+  NEW_USER
+  NEW_SUBSCRIPTION
+  SUBSCRIPTION_CANCELED
+  PAYMENT_FAILED
+  NEW_SUPPORT
 }
 
 model Legal {
@@ -245,38 +288,126 @@ model Support {
   createdAt   DateTime      @default(now())
 }
 
-model SubscriptionPlan {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  title           String
-  description     String
-  price           Float
-  stripeProductId String
-  stripePriceId   String
-  updatedAt       DateTime @updatedAt
+/// Admin-managed purchasable plan, mapped to a RevenueCat (store) product.
+model Package {
+  id                  String         @id @default(auto()) @map("_id") @db.ObjectId
+  title               String
+  billingCycle        BillingCycle
+  revenueCatProductId String         @unique
+  entitlementId       String
+  description         String[]
+  price               Float
+  currency            String         @default("gbp")
+  isDeleted           Boolean        @default(false)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  subscriptions       Subscription[]
+
+  @@index([isDeleted])
 }
 
+enum BillingCycle {
+  MONTHLY
+  ANNUAL
+}
+
+/// One per user; mirrors the user's RevenueCat entitlement state.
 model Subscription {
-  id                   String             @id @default(auto()) @map("_id") @db.ObjectId
-  authId               String             @unique @db.ObjectId
-  auth                 Auth               @relation(fields: [authId], references: [id])
-  stripeCustomerId     String
-  stripeSubscriptionId String
-  status               SubscriptionStatus @default(INCOMPLETE)
-  cancelAtPeriodEnd    Boolean            @default(false)
-  currentPeriodEnd     DateTime?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
+  id                    String             @id @default(auto()) @map("_id") @db.ObjectId
+  authId                String             @unique @db.ObjectId
+  auth                  Auth               @relation(fields: [authId], references: [id])
+  packageId             String?            @db.ObjectId
+  package               Package?           @relation(fields: [packageId], references: [id])
+  revenueCatAppUserId   String
+  productId             String?
+  entitlementId         String?
+  store                 String?
+  /// SANDBOX | PRODUCTION
+  environment           String?
+  originalTransactionId String?
+  latestTransactionId   String?
+  lastEventId           String?
+  status                SubscriptionStatus
+  cancelAtPeriodEnd     Boolean            @default(false)
+  currentPeriodStart    DateTime?
+  currentPeriodEnd      DateTime?
+  cancelledAt           DateTime?
+  managementUrl         String?
+  rawEventData          Json?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+}
+
+/// One record per store transaction (from RevenueCat webhook events).
+model Payment {
+  id                String        @id @default(auto()) @map("_id") @db.ObjectId
+  authId            String?       @db.ObjectId
+  auth              Auth?         @relation(fields: [authId], references: [id])
+  transactionId     String        @unique
+  store             String?
+  productId         String?
+  packageId         String?       @db.ObjectId
+  eventType         String?
+  /// SANDBOX | PRODUCTION
+  environment       String?
+  amount            Float // major units (e.g. 9.99)
+  amountRefunded    Float         @default(0)
+  /// amount / amountRefunded converted to GBP (the reporting currency); null = unknown currency
+  amountGbp         Float?
+  amountRefundedGbp Float?
+  currency          String
+  status            PaymentStatus
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([status, createdAt])
+}
+
+enum PaymentStatus {
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+/// Single document: contact & community links shown in the app.
+model AppSetting {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  supportEmail  String
+  supportPhone  String
+  communityLink String
+  updatedAt     DateTime @updatedAt
+
+  @@map("app_settings")
+}
+
+model Quote {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  text      String
+  author    String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([isActive, createdAt])
+}
+
+/// Admin-managed default items of the pre-treatment IVF checklist.
+model ChecklistTemplate {
+  id        String            @id @default(auto()) @map("_id") @db.ObjectId
+  category  ChecklistCategory
+  title     String
+  order     Int
+  createdAt DateTime          @default(now())
+
+  @@index([category, order])
 }
 
 enum SubscriptionStatus {
-  INCOMPLETE
-  INCOMPLETE_EXPIRED
-  TRIALING
   ACTIVE
-  PAST_DUE
-  CANCELED
-  UNPAID
-  PAUSED
+  /// entitlement lost because of a billing problem (recoverable)
+  BILLING_ISSUE
+  /// refunded / revoked
+  CANCELLED
+  EXPIRED
 }
 
 enum SupportStatus {
@@ -353,7 +484,7 @@ enum SymptomName {
   HEADACHE
   NAUSEA
   BREAST_TENDERNESS
-  CAMPING
+  CRAMPING
   OTHER
 }
 

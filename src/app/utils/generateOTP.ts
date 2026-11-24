@@ -1,6 +1,6 @@
-const generateOTP = () => {
-  const otp = Math.floor(100000 + Math.random() * 900000);
+import crypto from "crypto";
 
-  return otp.toString();
-};
+/** 6-digit OTP from a CSPRNG (Math.random is predictable). */
+const generateOTP = () => crypto.randomInt(100000, 1000000).toString();
+
 export default generateOTP;

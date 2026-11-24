@@ -1,0 +1,38 @@
+# dependencies / build output (rebuilt inside the image)
+node_modules
+dist
+build
+coverage
+*.tsbuildinfo
+
+# secrets - env is injected at runtime via docker compose env_file
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+service-account*.json
+serviceAccount*.json
+*-firebase-adminsdk-*.json
+
+# VCS, editor and agent folders
+.git
+.gitignore
+.vscode
+.claude
+.agents
+.kilo
+.history
+postman
+
+# docker files themselves
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# misc
+*.log
+logs
+uploads
+.DS_Store
+Thumbs.db

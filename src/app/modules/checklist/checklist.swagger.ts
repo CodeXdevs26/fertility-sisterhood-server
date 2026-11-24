@@ -15,12 +15,18 @@ const tag = "Checklists";
 const fields = {
   title: str("Book blood test"),
   category: ref("ChecklistCategory"),
-  date: dateTime("Defaults to now"),
+  date: dateTime(
+    "Calendar day (send YYYY-MM-DD). Defaults to the user's local today."
+  ),
   description: optStr("Call the clinic before 5pm"),
 };
 
 export const checklistSwagger = {
-  tag: { name: tag, description: "Daily to-do checklist (premium)" },
+  tag: {
+    name: tag,
+    description:
+      "Daily to-do checklist (premium). The first time a user opens their checklist (`GET /checklists` or `/checklists/today`), the admin's default items (Checklist templates) are copied into it once, dated today.",
+  },
   paths: {
     "/checklists": {
       post: op({
@@ -44,12 +50,49 @@ export const checklistSwagger = {
           201
         ),
       }),
+      get: op({
+        tag,
+        summary: "List my checklist",
+        description:
+          "All items, oldest day first. Filter by `category`, `status` and/or one calendar `date`.",
+        access: "user",
+        premium: true,
+        parameters: [
+          ...pageParams,
+          queryParam(
+            "category",
+            "Filter by category",
+            ref("ChecklistCategory")
+          ),
+          queryParam("status", "Filter by status", ref("ChecklistStatus")),
+          queryParam("date", "One calendar day, e.g. 2026-05-01", {
+            type: "string",
+            format: "date",
+          }),
+        ],
+        responses: ok(
+          "Checklist fetched successfully!",
+          paged("checklists", {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              title: { type: "string" },
+              category: ref("ChecklistCategory"),
+              date: dateTime(),
+              description: { type: "string", nullable: true },
+              status: ref("ChecklistStatus"),
+            },
+          })
+        ),
+        errors: [422],
+      }),
     },
     "/checklists/today": {
       get: op({
         tag,
         summary: "List today's checklist",
-        description: "Only items dated today are returned.",
+        description:
+          "Only items dated today in the user's timezone (`Auth.timezone`, default Europe/London) are returned.",
         access: "user",
         premium: true,
         parameters: [

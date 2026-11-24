@@ -7,5 +7,6 @@ const router = Router();
 router.use(authorize(UserRole.ADMIN));
 router.get("/stats", metaController.getStats);
 router.get("/user-overview", metaController.getUserOverview);
+router.get("/earning-overview", metaController.getEarningOverview);
 
 export const metaRoutes = router;

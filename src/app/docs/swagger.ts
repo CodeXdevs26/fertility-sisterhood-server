@@ -4,6 +4,8 @@ import { appointmentSwagger } from "../modules/appointment/appointment.swagger.j
 import { authSwagger } from "../modules/auth/auth.swagger.js";
 import { checklistSwagger } from "../modules/checklist/checklist.swagger.js";
 import { costSwagger } from "../modules/cost/cost.swagger.js";
+import { cycleSwagger } from "../modules/cycle/cycle.swagger.js";
+import { notificationSwagger } from "../modules/notification/notification.swagger.js";
 import { documentSwagger } from "../modules/document/document.swagger.js";
 import { journalSwagger } from "../modules/journal/journal.swagger.js";
 import { legalSwagger } from "../modules/legal/legal.swagger.js";
@@ -15,10 +17,16 @@ import { photoSwagger } from "../modules/photo/photo.swagger.js";
 import { profileSwagger } from "../modules/profile/profile.swagger.js";
 import { questionSwagger } from "../modules/question/question.swagger.js";
 import { subscriptionSwagger } from "../modules/subscription/subscription.swagger.js";
+import { packageSwagger } from "../modules/package/package.swagger.js";
 import { supplementSwagger } from "../modules/supplement/supplement.swagger.js";
 import { supportSwagger } from "../modules/support/support.swagger.js";
 import { symptomSwagger } from "../modules/symptom/symptom.swagger.js";
 import { testResultSwagger } from "../modules/testResult/testResult.swagger.js";
+import { exportSwagger } from "../modules/export/export.swagger.js";
+import { paymentSwagger } from "../modules/payment/payment.swagger.js";
+import { appSettingSwagger } from "../modules/appSetting/appSetting.swagger.js";
+import { quoteSwagger } from "../modules/quote/quote.swagger.js";
+import { checklistTemplateSwagger } from "../modules/checklistTemplate/checklistTemplate.swagger.js";
 
 const modules = [
   authSwagger,
@@ -26,6 +34,7 @@ const modules = [
   profileSwagger,
   legalSwagger,
   symptomSwagger,
+  cycleSwagger,
   appointmentSwagger,
   medicationSwagger,
   supplementSwagger,
@@ -39,7 +48,14 @@ const modules = [
   supportSwagger,
   photoSwagger,
   subscriptionSwagger,
+  packageSwagger,
   metaSwagger,
+  notificationSwagger,
+  exportSwagger,
+  paymentSwagger,
+  appSettingSwagger,
+  quoteSwagger,
+  checklistTemplateSwagger,
 ];
 
 export const openApiDocument = {

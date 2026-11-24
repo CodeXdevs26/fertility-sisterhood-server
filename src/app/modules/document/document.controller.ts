@@ -4,7 +4,7 @@ import handleAsyncRequest from "../../utils/handleAsyncRequest.js";
 import pick from "../../utils/pick.js";
 import { sendResponse } from "../../utils/sendResponse.js";
 import { documentServices } from "./document.service.js";
-import { documentQueryZod } from "./document.validation.js";
+import { TDocumentQuery } from "./document.validation.js";
 
 const create = handleAsyncRequest(async (req: TRequest, res: Response) => {
   const data = await documentServices.create(req.user!.id, req.body, req.file);
@@ -16,7 +16,7 @@ const create = handleAsyncRequest(async (req: TRequest, res: Response) => {
 });
 
 const getMy = handleAsyncRequest(async (req: TRequest, res: Response) => {
-  const { date } = documentQueryZod.parse(req.query);
+  const { date } = req.query as TDocumentQuery;
   const data = await documentServices.getMy(
     req.user!.id,
     pick(req.query, ["page", "limit"]),

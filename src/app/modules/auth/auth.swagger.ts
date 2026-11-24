@@ -48,7 +48,7 @@ export const authSwagger = {
           ])
         ),
         responses: ok("Signup successful!", ref("User"), 201),
-        errors: [400],
+        errors: [400, 429],
       }),
     },
     "/auth/login": {
@@ -56,7 +56,7 @@ export const authSwagger = {
         tag,
         summary: "Login with email and password",
         description:
-          "Returns an access token in the body and sets the refresh token in the `player-centralRefreshToken` httpOnly cookie. Fails with 400 if the account is `PENDING`, `BLOCKED`, `DELETED` or was created with Google.",
+          "Returns an access token in the body and sets the refresh token in the `player-centralRefreshToken` httpOnly cookie (`SameSite=Lax`). With `isMobileApp: true` the refresh token is also returned in the body; send it back in the `x-refresh-token` header to refresh. Fails with 400 if the account is `PENDING`, `BLOCKED`, `DELETED` or was created with Google.",
         requestBody: jsonBody(
           obj(
             {
@@ -64,9 +64,17 @@ export const authSwagger = {
               password,
               fcmToken: optStr(
                 "fcm-device-token",
-                "Push notification token (optional)"
+                "FCM device token for push notifications (optional). Removed from any other account that had it, and cleared again on logout."
               ),
-              isMobileApp: { type: "boolean", default: false },
+              timezone: optStr(
+                "Asia/Dhaka",
+                "IANA timezone of the device (optional). Used for the user's local day and to send reminders at local 08:00 / 20:00. Defaults to Europe/London."
+              ),
+              isMobileApp: {
+                type: "boolean",
+                default: false,
+                description: "`true` also returns `refreshToken` in the body",
+              },
             },
             ["email", "password"]
           )
@@ -75,9 +83,13 @@ export const authSwagger = {
           type: "object",
           properties: {
             accessToken: { type: "string", example: "eyJhbGciOiJIUzI1NiIs..." },
+            refreshToken: {
+              type: "string",
+              description: "Only when `isMobileApp: true`",
+            },
           },
         }),
-        errors: [400],
+        errors: [400, 429],
       }),
     },
     "/auth/refresh-token": {
@@ -85,7 +97,16 @@ export const authSwagger = {
         tag,
         summary: "Get a new access token",
         description:
-          "Reads the refresh token from the `player-centralRefreshToken` cookie (set at login). No request body or Authorization header is needed.",
+          "Reads the refresh token from the `player-centralRefreshToken` cookie (set at login), or from the `x-refresh-token` header (mobile apps). Fails with 401 if the account is no longer `ACTIVE` or the token was revoked (password change / reset, block).",
+        parameters: [
+          {
+            name: "x-refresh-token",
+            in: "header",
+            required: false,
+            description: "Refresh token for clients without cookies",
+            schema: { type: "string" },
+          },
+        ],
         responses: ok("Token refreshed successfully!", {
           type: "object",
           properties: {
@@ -112,7 +133,7 @@ export const authSwagger = {
           )
         ),
         responses: ok("Password reset successfully!"),
-        errors: [401, 404],
+        errors: [401, 404, 429],
       }),
     },
     "/auth/change-password": {
@@ -126,15 +147,27 @@ export const authSwagger = {
             "newPassword",
           ])
         ),
-        responses: ok("Password changed successfully!"),
-        errors: [400, 404],
+        description:
+          "Logs out every other device (all earlier tokens are revoked). This device gets new tokens: the access token in the body and the refresh token in the cookie; clients that sent `x-refresh-token` also get `refreshToken` in the body.",
+        responses: ok("Password changed successfully!", {
+          type: "object",
+          properties: {
+            accessToken: { type: "string" },
+            refreshToken: {
+              type: "string",
+              description: "Only when the request had `x-refresh-token`",
+            },
+          },
+        }),
+        errors: [400, 404, 429],
       }),
     },
     "/auth/change-account-status/{userId}": {
       patch: op({
         tag,
         summary: "Activate, block or delete a user",
-        description: "Admin accounts cannot be changed (400).",
+        description:
+          "Admin accounts cannot be changed (400). The user gets an `ACCOUNT` notification (push + in-app) when the status actually changes to `BLOCKED` or `ACTIVE`. Blocking/deleting also clears the user's `fcmToken`.",
         access: "admin",
         parameters: [idParam("userId", "Id of the user to change")],
         requestBody: jsonBody(
@@ -162,8 +195,9 @@ export const authSwagger = {
       post: op({
         tag,
         summary: "Logout",
-        description: "Clears the refresh token cookie.",
-        access: "admin",
+        description:
+          "Clears the refresh token cookie and the user's `fcmToken`, so this device stops receiving push notifications.",
+        access: "any",
         responses: ok("Logged out successfully!"),
       }),
     },
@@ -189,6 +223,11 @@ export const authSwagger = {
             enum: ["asc", "desc"],
           }),
           queryParam("role", "Comma separated roles, e.g. `USER`"),
+          queryParam(
+            "subscription",
+            "`premium` = subscription ACTIVE, `free` = no subscription or any other status. Omit for all.",
+            { type: "string", enum: ["premium", "free"] }
+          ),
         ],
         responses: ok(
           "Users retrieved successfully!",
@@ -208,6 +247,8 @@ export const authSwagger = {
             {
               type: "object",
               properties: {
+                provider: ref("LoginProvider"),
+                consent: ref("Consent"),
                 subscription: {
                   type: "object",
                   nullable: true,

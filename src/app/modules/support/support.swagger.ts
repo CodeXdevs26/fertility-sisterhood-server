@@ -61,11 +61,16 @@ export const supportSwagger = {
       }),
       get: op({
         tag,
-        summary: "List all support requests",
+        summary: "List support requests",
+        description:
+          "Without `searchTerm` only open (not `RESOLVED`) requests are listed. With `searchTerm` all requests match, including resolved ones.",
         access: "admin",
         parameters: [
           ...pageParams,
-          queryParam("searchTerm", "Search in title and description"),
+          queryParam(
+            "searchTerm",
+            "Case-insensitive search in title, description, user name and email"
+          ),
         ],
         responses: ok(
           "Support requests fetched successfully!",

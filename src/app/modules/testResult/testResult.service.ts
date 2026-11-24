@@ -56,6 +56,7 @@ const getSingle = async (authId: string, id: string) => {
     where: { id, authId },
     select: {
       id: true,
+      category: true,
       name: true,
       date: true,
       value: true,

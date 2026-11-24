@@ -12,3 +12,10 @@ export const verifyOtpZod = z.object({
 });
 
 export type TVerifyOtpInput = z.infer<typeof verifyOtpZod>;
+
+export const sendOtpZod = z.object({
+  email: emailZod,
+  purpose: z.nativeEnum(OTPPurpose).optional(),
+});
+
+export type TSendOtpInput = z.infer<typeof sendOtpZod>;
