@@ -28,10 +28,10 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends openssl \
   && rm -rf /var/lib/apt/lists/*
 
-# NOTE: `docker run --env-file .env` overrides this with the NODE_ENV in .env;
-# docker compose re-sets it to production explicitly
+# image defaults; docker compose (env_file) and `docker run --env-file .env`
+# override them with the values in .env
 ENV NODE_ENV=production
-ENV PORT=5003
+ENV PORT=5004
 
 COPY --from=build --chown=node:node /app/package.json ./package.json
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
@@ -42,9 +42,9 @@ COPY --from=build --chown=node:node /app/src/app/emailTemplates ./src/app/emailT
 
 USER node
 
-EXPOSE 5003
+EXPOSE 5004
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD node -e "fetch('http://localhost:' + (process.env.PORT || 5003) + '/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+  CMD node -e "fetch('http://localhost:' + (process.env.PORT || 5004) + '/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
 CMD ["node", "dist/server.js"]

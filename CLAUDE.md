@@ -9,6 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm start`: run the compiled `dist/server.js`
 - `npm run lint` / `npm run lint:fix`: ESLint
 - `npm run format` / `npm run format:check`: Prettier (double quotes, semicolons, `trailingComma: es5`, `arrowParens: avoid`)
+- `npm run seed:packages` (`:prod` in Docker): creates the default monthly subscription package if it is missing. Matching is by `revenueCatProductId`.
 - `npm run seed:admin`: create the admin user from `ADMIN_EMAIL` / `ADMIN_PASSWORD`. Inside the Docker container use `docker compose exec server npm run seed:admin:prod` (runs the compiled `dist/seedAdmin.js`).
 - `npm run migrate:revenuecat` (`:prod` in Docker): one-off Stripe → RevenueCat data migration. Run it once **before** `npx prisma db push`. It is safe to re-run.
 - `npm run migrate:data` (`:prod` in Docker): one-off data fixes. Run it **before** deploying the code that uses them; it is safe to re-run.
@@ -27,7 +28,7 @@ Express 5, TypeScript (ESM, `module: NodeNext`), Prisma 6 on MongoDB, Zod 4, JWT
 
 - **ESM imports must use the `.js` extension**, even from `.ts` files (`import x from "./foo.js"`).
 - The tsconfig is strict and also sets `noUncheckedIndexedAccess`, `noUnusedLocals`, and `noUnusedParameters`. Prefix unused parameters with `_`.
-- Config is read from env vars in `src/app/config/index.ts`. `PORT` defaults to 5003. If the S3 keys are unset, the S3 client falls back to the AWS default credential chain (e.g. an IAM role). Of the Firebase variables, only `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL` and `FIREBASE_PRIVATE_KEY` are read; config converts the literal `\n` in the private key into real newlines.
+- Config is read from env vars in `src/app/config/index.ts`. `PORT` defaults to 5004. If the S3 keys are unset, the S3 client falls back to the AWS default credential chain (e.g. an IAM role). Of the Firebase variables, only `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL` and `FIREBASE_PRIVATE_KEY` are read; config converts the literal `\n` in the private key into real newlines.
 
 ## Architecture
 

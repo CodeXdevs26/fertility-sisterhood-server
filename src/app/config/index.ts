@@ -5,7 +5,7 @@ dotenv.config({ path: path.join(process.cwd(), ".env") });
 
 export default {
   env: process.env.NODE_ENV,
-  port: Number(process.env.PORT) || 5003,
+  port: Number(process.env.PORT) || 5004,
   // Express "trust proxy" value: which proxy addresses may set X-Forwarded-For
   trustProxy: process.env.TRUST_PROXY || "loopback",
   email: {

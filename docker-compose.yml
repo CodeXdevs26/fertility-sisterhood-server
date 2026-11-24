@@ -7,10 +7,9 @@ services:
     # tini as PID 1: forwards SIGTERM so `docker compose down` stops node cleanly
     init: true
     env_file: .env
+    # NODE_ENV comes from .env (set it to "production" on the server)
     environment:
-      # overrides NODE_ENV from .env (often "development" locally)
-      NODE_ENV: production
-      PORT: ${PORT:-5003}
+      PORT: ${PORT:-5004}
       # inside Docker every request arrives from the bridge gateway (172.x),
       # so trust private-network proxies (nginx on the host / in compose) to
       # pass the real client IP via X-Forwarded-For
@@ -18,7 +17,7 @@ services:
     # leaves room for the 8s shutdown timeout in src/server.ts
     stop_grace_period: 10s
     ports:
-      - "${PORT:-5003}:${PORT:-5003}"
+      - "${PORT:-5004}:${PORT:-5004}"
     logging:
       driver: json-file
       options:

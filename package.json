@@ -16,6 +16,8 @@
     "seed:admin:prod": "node dist/seedAdmin.js",
     "seed:checklist": "tsx src/seedChecklistTemplates.ts",
     "seed:checklist:prod": "node dist/seedChecklistTemplates.js",
+    "seed:packages": "tsx src/seedPackages.ts",
+    "seed:packages:prod": "node dist/seedPackages.js",
     "migrate:revenuecat": "tsx src/migrateToRevenueCat.ts",
     "migrate:revenuecat:prod": "node dist/migrateToRevenueCat.js",
     "migrate:data": "tsx src/migrateData.ts",
