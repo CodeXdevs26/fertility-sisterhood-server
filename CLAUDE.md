@@ -71,6 +71,7 @@ Each feature lives in `src/app/modules/<name>/` and has five files:
 - All models are in `prisma/schema.prisma`. `Auth` is the user, and every user-owned model has an `authId` ObjectId relation to it. Import the client singleton from `utils/prisma.ts`, and import enums from `@prisma/client`.
 
 ### Subscriptions (RevenueCat)
+- The mobile developer's guide to app integration, testing and go-live is `docs/subscription-integration.md`. Update it whenever subscription routes or behaviour change.
 - **Premium means `Subscription.status === ACTIVE`.** There is one `Subscription` row per user (`authId @unique`).
 - **The app must call `Purchases.logIn(<Auth.id>)`.** RevenueCat's `app_user_id` is the user id.
 - `Package` (`modules/package`) maps a RevenueCat `revenueCatProductId` to an `entitlementId`. Packages are soft-deleted (`isDeleted`). Look a package up with `findPackageByProduct`.
