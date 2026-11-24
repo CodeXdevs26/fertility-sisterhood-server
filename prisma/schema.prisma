@@ -284,43 +284,74 @@ model Support {
   createdAt   DateTime      @default(now())
 }
 
-model SubscriptionPlan {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  title           String
-  description     String
-  price           Float
-  stripeProductId String
-  stripePriceId   String
-  updatedAt       DateTime @updatedAt
+/// Admin-managed purchasable plan, mapped to a RevenueCat (store) product.
+model Package {
+  id                  String         @id @default(auto()) @map("_id") @db.ObjectId
+  title               String
+  billingCycle        BillingCycle
+  revenueCatProductId String         @unique
+  entitlementId       String
+  description         String[]
+  price               Float
+  currency            String         @default("eur")
+  isDeleted           Boolean        @default(false)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  subscriptions       Subscription[]
+
+  @@index([isDeleted])
 }
 
+enum BillingCycle {
+  MONTHLY
+  ANNUAL
+}
+
+/// One per user; mirrors the user's RevenueCat entitlement state.
 model Subscription {
-  id                   String             @id @default(auto()) @map("_id") @db.ObjectId
-  authId               String             @unique @db.ObjectId
-  auth                 Auth               @relation(fields: [authId], references: [id])
-  stripeCustomerId     String
-  stripeSubscriptionId String
-  status               SubscriptionStatus @default(INCOMPLETE)
-  cancelAtPeriodEnd    Boolean            @default(false)
-  currentPeriodEnd     DateTime?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
+  id                    String             @id @default(auto()) @map("_id") @db.ObjectId
+  authId                String             @unique @db.ObjectId
+  auth                  Auth               @relation(fields: [authId], references: [id])
+  packageId             String?            @db.ObjectId
+  package               Package?           @relation(fields: [packageId], references: [id])
+  revenueCatAppUserId   String
+  productId             String?
+  entitlementId         String?
+  store                 String?
+  /// SANDBOX | PRODUCTION
+  environment           String?
+  originalTransactionId String?
+  latestTransactionId   String?
+  lastEventId           String?
+  status                SubscriptionStatus
+  cancelAtPeriodEnd     Boolean            @default(false)
+  currentPeriodStart    DateTime?
+  currentPeriodEnd      DateTime?
+  cancelledAt           DateTime?
+  managementUrl         String?
+  rawEventData          Json?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
 }
 
-/// One record per Stripe invoice (subscription payment).
+/// One record per store transaction (from RevenueCat webhook events).
 model Payment {
-  id               String        @id @default(auto()) @map("_id") @db.ObjectId
-  authId           String?       @db.ObjectId
-  auth             Auth?         @relation(fields: [authId], references: [id])
-  stripeInvoiceId  String        @unique
-  stripeCustomerId String?
-  amount           Float // major units (e.g. 9.99)
-  amountRefunded   Float         @default(0)
-  currency         String
-  status           PaymentStatus
-  invoiceUrl       String?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  id             String        @id @default(auto()) @map("_id") @db.ObjectId
+  authId         String?       @db.ObjectId
+  auth           Auth?         @relation(fields: [authId], references: [id])
+  transactionId  String        @unique
+  store          String?
+  productId      String?
+  packageId      String?       @db.ObjectId
+  eventType      String?
+  /// SANDBOX | PRODUCTION
+  environment    String?
+  amount         Float // major units (e.g. 9.99)
+  amountRefunded Float         @default(0)
+  currency       String
+  status         PaymentStatus
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   @@index([status, createdAt])
 }
@@ -364,14 +395,12 @@ model ChecklistTemplate {
 }
 
 enum SubscriptionStatus {
-  INCOMPLETE
-  INCOMPLETE_EXPIRED
-  TRIALING
   ACTIVE
-  PAST_DUE
-  CANCELED
-  UNPAID
-  PAUSED
+  /// entitlement lost because of a billing problem (recoverable)
+  BILLING_ISSUE
+  /// refunded / revoked
+  CANCELLED
+  EXPIRED
 }
 
 enum SupportStatus {

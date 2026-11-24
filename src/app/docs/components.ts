@@ -7,16 +7,8 @@ export const ENUMS = {
   UserRole: ["ADMIN", "USER"],
   UserStatus: ["PENDING", "ACTIVE", "BLOCKED", "DELETED"],
   OTPPurpose: ["VERIFY_ACCOUNT", "RESET_PASSWORD"],
-  SubscriptionStatus: [
-    "INCOMPLETE",
-    "INCOMPLETE_EXPIRED",
-    "TRIALING",
-    "ACTIVE",
-    "PAST_DUE",
-    "CANCELED",
-    "UNPAID",
-    "PAUSED",
-  ],
+  SubscriptionStatus: ["ACTIVE", "BILLING_ISSUE", "CANCELLED", "EXPIRED"],
+  BillingCycle: ["MONTHLY", "ANNUAL"],
   SupportStatus: ["PENDING", "RESOLVED"],
   PhotoMilestone: [
     "CONSULTATION",
@@ -141,6 +133,10 @@ export const components = {
       "Validation error!"
     ),
     Error500: errorResponse("Unexpected server error", "Something went wrong!"),
+    Error502: errorResponse(
+      "Upstream service (RevenueCat) failed",
+      "RevenueCat request failed"
+    ),
   },
   schemas: {
     ...enumSchemas,
@@ -195,14 +191,27 @@ export const components = {
         amountRefunded: { type: "number", example: 0 },
         currency: { type: "string", example: "eur" },
         status: ref("PaymentStatus"),
-        invoiceUrl: {
+        store: {
           type: "string",
           nullable: true,
-          example: "https://invoice.stripe.com/i/acct_123/test_abc",
+          example: "APP_STORE",
+          description:
+            "RevenueCat store (APP_STORE, PLAY_STORE, ...), `TEST_API` for test purchases, `STRIPE` for old records",
+        },
+        productId: {
+          type: "string",
+          nullable: true,
+          example: "premium_monthly",
+        },
+        environment: {
+          type: "string",
+          nullable: true,
+          enum: ["SANDBOX", "PRODUCTION"],
+          description: "Sandbox payments are excluded from revenue stats",
         },
         createdAt: {
           ...date,
-          description: "When the invoice was paid / created",
+          description: "When the transaction was purchased",
         },
         auth: {
           type: "object",
@@ -518,42 +527,68 @@ export const components = {
         createdAt: date,
       },
     },
-    SubscriptionPlan: {
+    Package: {
       type: "object",
       properties: {
         id,
-        title: { type: "string", example: "Premium" },
-        description: { type: "string" },
-        price: { type: "number", example: 9.99, description: "Per month" },
+        title: { type: "string", example: "Premium Monthly" },
+        billingCycle: ref("BillingCycle"),
+        revenueCatProductId: { type: "string", example: "premium_monthly" },
+        entitlementId: { type: "string", example: "premium" },
+        description: {
+          type: "array",
+          items: { type: "string" },
+          example: ["All trackers", "Morning digest"],
+        },
+        price: { type: "number", example: 9.99 },
         currency: {
           type: "string",
           example: "eur",
           description: "ISO currency code of price (lowercase)",
         },
+        isDeleted: { type: "boolean", example: false },
+        createdAt: date,
         updatedAt: date,
       },
     },
     MySubscription: {
       type: "object",
       nullable: true,
-      description: "`null` when the user never started a subscription.",
+      description: "`null` when the user never had a subscription.",
       properties: {
         status: ref("SubscriptionStatus"),
-        isPremium: { type: "boolean" },
-        autoRenew: { type: "boolean" },
-        endDate: { ...date, nullable: true },
+        isPremium: { type: "boolean", description: "status is `ACTIVE`" },
+        autoRenew: {
+          type: "boolean",
+          description: "`false` once auto-renew is turned off in the store",
+        },
+        endDate: {
+          ...date,
+          nullable: true,
+          description: "Current period end; `null` for lifetime",
+        },
+        store: {
+          type: "string",
+          nullable: true,
+          example: "APP_STORE",
+          description: "`TEST_API` for test purchases",
+        },
+        managementUrl: {
+          type: "string",
+          nullable: true,
+          example: "https://apps.apple.com/account/subscriptions",
+          description: "Open this to cancel or change the plan in the store",
+        },
+        package: {
+          type: "object",
+          nullable: true,
+          properties: {
+            id,
+            title: { type: "string", example: "Premium Monthly" },
+            billingCycle: ref("BillingCycle"),
+          },
+        },
         createdAt: date,
-      },
-    },
-    PurchaseResult: {
-      type: "object",
-      description: "Values needed by the Stripe PaymentSheet on the client.",
-      properties: {
-        subscriptionId: { type: "string", example: "sub_1Pxxxx" },
-        clientSecret: { type: "string", example: "pi_xxx_secret_xxx" },
-        ephemeralKey: { type: "string", example: "ek_test_xxx" },
-        customerId: { type: "string", example: "cus_xxx" },
-        publishableKey: { type: "string", example: "pk_test_xxx" },
       },
     },
   },

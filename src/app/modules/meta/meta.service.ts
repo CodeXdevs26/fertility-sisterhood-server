@@ -5,7 +5,7 @@ import {
   UserStatus,
 } from "@prisma/client";
 import prisma from "../../utils/prisma.js";
-import { REVENUE_STATUSES } from "../payment/payment.service.js";
+import { LIVE_PAYMENT, REVENUE_STATUSES } from "../payment/payment.service.js";
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
@@ -13,6 +13,7 @@ const round2 = (value: number) => Math.round(value * 100) / 100;
 const sumRevenue = async (createdAt?: { gte: Date; lt?: Date }) => {
   const { _sum } = await prisma.payment.aggregate({
     where: {
+      ...LIVE_PAYMENT,
       status: { in: REVENUE_STATUSES },
       ...(createdAt ? { createdAt } : {}),
     },
@@ -89,6 +90,7 @@ const getEarningOverview = async (query: Record<string, unknown>) => {
 
   const payments = await prisma.payment.findMany({
     where: {
+      ...LIVE_PAYMENT,
       status: { in: REVENUE_STATUSES },
       createdAt: {
         gte: new Date(Date.UTC(year, 0, 1)),

@@ -1,125 +1,100 @@
-import Stripe from "stripe";
 import { PaymentStatus, Prisma } from "@prisma/client";
 import {
   calculatePagination,
   TPaginationOptions,
 } from "../../utils/paginationCalculation.js";
 import prisma from "../../utils/prisma.js";
-import stripe from "../../utils/stripe.js";
+import { TRevenueCatEvent } from "../../utils/revenuecat.js";
+import { findPackageByProduct } from "../package/package.service.js";
 
-const toMajor = (minor: number) => Math.round(minor) / 100;
+const paymentSelect = { id: true, status: true, authId: true };
 
-const getId = (value: string | { id?: string } | null | undefined) =>
-  typeof value === "string" ? value : (value?.id ?? null);
+/** RevenueCat reports refunds as CANCELLATION with this reason. */
+export const isRefundEvent = (event: TRevenueCatEvent) =>
+  event.type === "CANCELLATION" && event.cancel_reason === "CUSTOMER_SUPPORT";
 
-/** authId from the subscription metadata, else from the saved Stripe customer. */
-const resolveAuthId = async (invoice: Stripe.Invoice) => {
-  const metaAuthId =
-    invoice.parent?.subscription_details?.metadata?.authId ?? null;
-  if (metaAuthId && /^[a-f\d]{24}$/i.test(metaAuthId)) return metaAuthId;
-
-  const customerId = getId(invoice.customer);
-  if (!customerId) return null;
-  const subscription = await prisma.subscription.findFirst({
-    where: { stripeCustomerId: customerId },
-    select: { authId: true },
-  });
-  return subscription?.authId ?? null;
+const statusForEvent = (event: TRevenueCatEvent): PaymentStatus | null => {
+  switch (event.type) {
+    case "INITIAL_PURCHASE":
+    case "RENEWAL":
+    case "PRODUCT_CHANGE":
+      return PaymentStatus.SUCCEEDED;
+    case "BILLING_ISSUE":
+      return PaymentStatus.FAILED;
+    default:
+      return isRefundEvent(event) ? PaymentStatus.REFUNDED : null;
+  }
 };
 
 /**
- * Saves / updates the Payment row for a Stripe invoice.
- * Called from the `invoice.paid` and `invoice.payment_failed` webhooks.
- * Returns the payment (or null for a $0 invoice, which is not recorded).
+ * Saves / updates the Payment row for a RevenueCat event, deduped by
+ * `transaction_id`. Only INITIAL_PURCHASE, RENEWAL, PRODUCT_CHANGE,
+ * BILLING_ISSUE and refunds are recorded; free (trial) transactions are not.
  */
-const recordInvoice = async (
-  invoice: Stripe.Invoice,
-  status: typeof PaymentStatus.SUCCEEDED | typeof PaymentStatus.FAILED
+const upsertRevenueCatPayment = async (
+  authId: string | null,
+  event: TRevenueCatEvent
 ) => {
-  const minor =
-    status === PaymentStatus.SUCCEEDED
-      ? invoice.amount_paid
-      : invoice.amount_due;
-  if (!minor) return null;
+  const status = statusForEvent(event);
+  const transactionId = event.transaction_id;
+  if (!status || !transactionId) return null;
 
+  const amount = Math.abs(event.price_in_purchased_currency ?? 0);
   const existing = await prisma.payment.findUnique({
-    where: { stripeInvoiceId: invoice.id },
-    select: { id: true, status: true, authId: true },
+    where: { transactionId },
+    select: paymentSelect,
   });
 
-  // a refund is final; a late/duplicate invoice event must not undo it
-  if (existing?.status === PaymentStatus.REFUNDED) return existing;
-  // a retried failure arriving after the invoice was paid must not undo it
-  if (
-    existing?.status === PaymentStatus.SUCCEEDED &&
-    status === PaymentStatus.FAILED
-  )
-    return existing;
-
-  const paidAt = invoice.status_transitions?.paid_at;
-  const data = {
-    amount: toMajor(minor),
-    currency: invoice.currency,
-    status,
-    invoiceUrl: invoice.hosted_invoice_url ?? null,
-  };
-
-  if (existing) {
-    return prisma.payment.update({
-      where: { id: existing.id },
-      data: {
-        ...data,
-        ...(status === PaymentStatus.SUCCEEDED && paidAt
-          ? { createdAt: new Date(paidAt * 1000) }
-          : {}),
-      },
-      select: { id: true, status: true, authId: true },
-    });
+  if (status === PaymentStatus.REFUNDED) {
+    if (existing) {
+      return prisma.payment.update({
+        where: { id: existing.id },
+        data: {
+          status,
+          ...(amount ? { amountRefunded: amount } : {}),
+        },
+        select: paymentSelect,
+      });
+    }
+    if (!amount) return null;
+  } else {
+    if (!amount) return null;
+    // a refund is final; a late/duplicate event must not undo it
+    if (existing?.status === PaymentStatus.REFUNDED) return existing;
+    // a retried failure arriving after the payment succeeded must not undo it
+    if (
+      existing?.status === PaymentStatus.SUCCEEDED &&
+      status === PaymentStatus.FAILED
+    )
+      return existing;
+    if (existing) {
+      return prisma.payment.update({
+        where: { id: existing.id },
+        data: { status, eventType: event.type },
+        select: paymentSelect,
+      });
+    }
   }
 
+  const pkg = await findPackageByProduct(event.product_id);
   return prisma.payment.create({
     data: {
-      ...data,
-      authId: await resolveAuthId(invoice),
-      stripeInvoiceId: invoice.id,
-      stripeCustomerId: getId(invoice.customer),
-      createdAt: new Date((paidAt ?? invoice.created) * 1000),
+      authId,
+      transactionId,
+      store: event.store ?? null,
+      productId: event.product_id ?? null,
+      packageId: pkg?.id ?? null,
+      eventType: event.type,
+      environment: event.environment ?? null,
+      amount,
+      amountRefunded: status === PaymentStatus.REFUNDED ? amount : 0,
+      currency: (event.currency ?? "eur").toLowerCase(),
+      status,
+      createdAt: new Date(
+        event.purchased_at_ms ?? event.event_timestamp_ms ?? Date.now()
+      ),
     },
-    select: { id: true, status: true, authId: true },
-  });
-};
-
-/** `charge.refunded`: stores the refunded amount on the invoice's payment. */
-const recordRefund = async (charge: Stripe.Charge) => {
-  const paymentIntentId = getId(charge.payment_intent);
-  if (!paymentIntentId) return;
-
-  const { data } = await stripe.invoicePayments.list({
-    payment: { type: "payment_intent", payment_intent: paymentIntentId },
-    limit: 1,
-  });
-  const invoiceId = getId(data[0]?.invoice);
-  if (!invoiceId) return; // not a subscription payment
-
-  let payment = await prisma.payment.findUnique({
-    where: { stripeInvoiceId: invoiceId },
-    select: { id: true },
-  });
-  if (!payment) {
-    // paid before payments were recorded - save it now
-    const invoice = await stripe.invoices.retrieve(invoiceId);
-    payment = await recordInvoice(invoice, PaymentStatus.SUCCEEDED);
-    if (!payment) return;
-  }
-
-  await prisma.payment.update({
-    where: { id: payment.id },
-    data: {
-      amountRefunded: toMajor(charge.amount_refunded),
-      status: charge.refunded
-        ? PaymentStatus.REFUNDED
-        : PaymentStatus.SUCCEEDED,
-    },
+    select: paymentSelect,
   });
 };
 
@@ -164,7 +139,9 @@ const getAll = async (
         amountRefunded: true,
         currency: true,
         status: true,
-        invoiceUrl: true,
+        store: true,
+        productId: true,
+        environment: true,
         createdAt: true,
         auth: { select: { id: true, name: true, email: true } },
       },
@@ -181,4 +158,9 @@ export const REVENUE_STATUSES: PaymentStatus[] = [
   PaymentStatus.REFUNDED,
 ];
 
-export const paymentServices = { recordInvoice, recordRefund, getAll };
+export const paymentServices = { upsertRevenueCatPayment, getAll };
+
+/** Sandbox (and test-purchase) payments never count as revenue. */
+export const LIVE_PAYMENT: Prisma.PaymentWhereInput = {
+  NOT: { environment: "SANDBOX" },
+};

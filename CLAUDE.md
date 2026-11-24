@@ -10,6 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run lint` / `npm run lint:fix`: ESLint
 - `npm run format` / `npm run format:check`: Prettier (double quotes, semicolons, `trailingComma: es5`, `arrowParens: avoid`)
 - `npm run seed:admin`: create the admin user from `ADMIN_EMAIL` / `ADMIN_PASSWORD`. Inside the Docker container use `docker compose exec server npm run seed:admin:prod` (runs the compiled `dist/seedAdmin.js`).
+- `npm run migrate:revenuecat` (`:prod` in Docker): one-off Stripe → RevenueCat data migration. Run it once **before** `npx prisma db push`. It is safe to re-run.
 - `src/server.ts` shuts down gracefully on SIGTERM/SIGINT: it stops the cron jobs, drains HTTP, disconnects Prisma, and force-exits after 8s.
 - `npx tsc --noEmit`: type-check only
 - `npx prisma db push`: sync `prisma/schema.prisma` to the database. The database is MongoDB, so there are no migrations. `npx prisma generate` runs on `postinstall`.
@@ -18,7 +19,7 @@ There is no test suite.
 
 ## Stack
 
-Express 5, TypeScript (ESM, `module: NodeNext`), Prisma 6 on MongoDB, Zod 4, JWT auth, Stripe subscriptions, AWS S3 uploads through multer memory storage, Firebase Admin (FCM push), `node-cron` scheduled jobs, and email sent over HTTP to an external service (`SEND_EMAIL_URL`). `socket.io` is installed but not used anywhere yet.
+Express 5, TypeScript (ESM, `module: NodeNext`), Prisma 6 on MongoDB, Zod 4, JWT auth, RevenueCat in-app subscriptions (REST API called with native `fetch`, no SDK), AWS S3 uploads through multer memory storage, Firebase Admin (FCM push), `node-cron` scheduled jobs, and email sent over HTTP to an external service (`SEND_EMAIL_URL`). `socket.io` is installed but not used anywhere yet.
 
 - **ESM imports must use the `.js` extension**, even from `.ts` files (`import x from "./foo.js"`).
 - The tsconfig is strict and also sets `noUncheckedIndexedAccess`, `noUnusedLocals`, and `noUnusedParameters`. Prefix unused parameters with `_`.
@@ -53,8 +54,20 @@ Each feature lives in `src/app/modules/<name>/` and has five files:
 ### Data model
 - All models are in `prisma/schema.prisma`. `Auth` is the user, and every user-owned model has an `authId` ObjectId relation to it. Import the client singleton from `utils/prisma.ts`, and import enums from `@prisma/client`.
 
-### Subscriptions (Stripe)
-- `/api/v1/subscriptions/webhook` receives the raw body: `app.ts` mounts `express.raw` for that path **before** `express.json()`. Keep that order.
+### Subscriptions (RevenueCat)
+- **Premium means `Subscription.status === ACTIVE`.** There is one `Subscription` row per user (`authId @unique`).
+- **The app must call `Purchases.logIn(<Auth.id>)`.** RevenueCat's `app_user_id` is the user id.
+- `Package` (`modules/package`) maps a RevenueCat `revenueCatProductId` to an `entitlementId`. Packages are soft-deleted (`isDeleted`). Look a package up with `findPackageByProduct`.
+- **`syncFromRevenueCat(authId)` in `subscription.service.ts` is the only writer of subscription state.** `test-purchase` is the one exception. It always re-reads the subscriber from the RevenueCat REST API (`utils/revenuecat.ts`), because webhook events can arrive out of order. Status rules:
+  - entitlement active (grace period included) → `ACTIVE`
+  - refunded → `CANCELLED`
+  - billing issue → `BILLING_ISSUE`
+  - anything else → `EXPIRED`
+- A `CANCELLATION` event only means auto-renew was turned off (`cancelAtPeriodEnd = true`). **Never end Premium on it.** Refunds arrive as `CANCELLATION` with `cancel_reason: CUSTOMER_SUPPORT`.
+- **Webhook:** `POST /subscriptions/webhook/revenuecat` is authenticated by the `Authorization` header (`REVENUECAT_WEBHOOK_SECRET`) and parsed by `express.json()`.
+- **Payments:** `paymentServices.upsertRevenueCatPayment` records them, deduped by `transactionId`.
+  - `environment: "SANDBOX"` payments (test purchases included) are excluded from revenue through `LIVE_PAYMENT`.
+- **`POST /subscriptions/test-purchase`** returns 404 when `NODE_ENV=production`.
 
 ### API docs (Swagger)
 - The docs are served at `/api-docs` (UI) and `/api-docs.json`. They are hand-written and not generated from the code.

@@ -29,10 +29,11 @@ export default {
     region: process.env.AWS_REGION,
     bucket: process.env.AWS_BUCKET_NAME,
   },
-  stripe: {
-    secretKey: process.env.STRIPE_SECRET_KEY,
-    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
-    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+  revenueCat: {
+    // secret (v1) REST API key, used to read subscriber state
+    apiKey: process.env.REVENUECAT_API_KEY,
+    // value RevenueCat sends in the webhook Authorization header
+    webhookSecret: process.env.REVENUECAT_WEBHOOK_SECRET,
   },
   firebase: {
     projectId: process.env.FIREBASE_PROJECT_ID,

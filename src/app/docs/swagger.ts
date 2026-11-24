@@ -17,6 +17,7 @@ import { photoSwagger } from "../modules/photo/photo.swagger.js";
 import { profileSwagger } from "../modules/profile/profile.swagger.js";
 import { questionSwagger } from "../modules/question/question.swagger.js";
 import { subscriptionSwagger } from "../modules/subscription/subscription.swagger.js";
+import { packageSwagger } from "../modules/package/package.swagger.js";
 import { supplementSwagger } from "../modules/supplement/supplement.swagger.js";
 import { supportSwagger } from "../modules/support/support.swagger.js";
 import { symptomSwagger } from "../modules/symptom/symptom.swagger.js";
@@ -47,6 +48,7 @@ const modules = [
   supportSwagger,
   photoSwagger,
   subscriptionSwagger,
+  packageSwagger,
   metaSwagger,
   notificationSwagger,
   exportSwagger,

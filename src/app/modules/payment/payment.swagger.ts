@@ -13,7 +13,7 @@ export const paymentSwagger = {
   tag: {
     name: tag,
     description:
-      "Stripe subscription payments, saved from the `invoice.paid`, `invoice.payment_failed` and `charge.refunded` webhooks.",
+      "In-app purchase transactions, saved from RevenueCat webhook events (one row per store transaction). Records from before the RevenueCat migration have `store: STRIPE`.",
   },
   paths: {
     "/payments": {
@@ -21,7 +21,7 @@ export const paymentSwagger = {
         tag,
         summary: "List transactions",
         description:
-          "Newest first. `auth` is `null` when the payment could not be linked to a user. A partial refund keeps status `SUCCEEDED` and sets `amountRefunded`.",
+          "Newest first. `auth` is `null` when the payment could not be linked to a user. Refunds set status `REFUNDED` and `amountRefunded`.",
         access: "admin",
         parameters: [
           ...pageParams,

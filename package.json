@@ -15,7 +15,9 @@
     "seed:admin": "tsx src/seedAdmin.ts",
     "seed:admin:prod": "node dist/seedAdmin.js",
     "seed:checklist": "tsx src/seedChecklistTemplates.ts",
-    "seed:checklist:prod": "node dist/seedChecklistTemplates.js"
+    "seed:checklist:prod": "node dist/seedChecklistTemplates.js",
+    "migrate:revenuecat": "tsx src/migrateToRevenueCat.ts",
+    "migrate:revenuecat:prod": "node dist/migrateToRevenueCat.js"
   },
   "keywords": [],
   "author": "",
@@ -35,7 +37,6 @@
     "multer": "^2.2.0",
     "node-cron": "^4.6.0",
     "socket.io": "^4.8.3",
-    "stripe": "^23.1.0",
     "ts-node-dev": "^2.0.0",
     "zod": "^4.4.3"
   },

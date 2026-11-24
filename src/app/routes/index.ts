@@ -17,6 +17,7 @@ import { documentRoutes } from "../modules/document/document.routes.js";
 import { supportRoutes } from "../modules/support/support.routes.js";
 import { photoRoutes } from "../modules/photo/photo.routes.js";
 import { subscriptionRoutes } from "../modules/subscription/subscription.routes.js";
+import { packageRoutes } from "../modules/package/package.routes.js";
 import { metaRoutes } from "../modules/meta/meta.routes.js";
 import { cycleRoutes } from "../modules/cycle/cycle.routes.js";
 import { notificationRoutes } from "../modules/notification/notification.routes.js";
@@ -48,6 +49,7 @@ const routes = [
   { path: "/support", route: supportRoutes },
   { path: "/photos", route: photoRoutes },
   { path: "/subscriptions", route: subscriptionRoutes },
+  { path: "/packages", route: packageRoutes },
   { path: "/meta", route: metaRoutes },
   { path: "/notifications", route: notificationRoutes },
   { path: "/export", route: exportRoutes },

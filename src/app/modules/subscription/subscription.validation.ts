@@ -1,9 +1,7 @@
 import { z } from "zod";
 
-export const updateSubscriptionPlanZod = z.object({
-  title: z.string().trim().min(1),
-  description: z.string().trim().min(1),
-  price: z.number().positive(),
+export const testPurchaseZod = z.object({
+  packageId: z.string().regex(/^[a-f\d]{24}$/i, "Invalid package id"),
 });
 
-export type TUpdateSubscriptionPlan = z.infer<typeof updateSubscriptionPlanZod>;
+export type TTestPurchase = z.infer<typeof testPurchaseZod>;
