@@ -170,29 +170,35 @@ model Cost {
 }
 
 model Cycle {
-  id          String    @id @default(auto()) @map("_id") @db.ObjectId
-  authId      String    @db.ObjectId
-  auth        Auth      @relation(fields: [authId], references: [id])
-  startDate   DateTime // UTC midnight of the first day
-  cyclePeriod Int? // length in days; null = ongoing
-  endDate     DateTime? // UTC midnight of the last day (inclusive); null = ongoing
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  authId       String    @db.ObjectId
+  auth         Auth      @relation(fields: [authId], references: [id])
+  startDate    DateTime // UTC midnight of the first day
+  cyclePeriod  Int? // length in days; null = ongoing
+  endDate      DateTime? // UTC midnight of the last day (inclusive); null = ongoing
+  /// number of bleeding days (optional)
+  periodLength Int?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@index([authId, startDate])
 }
 
 model TestResult {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  authId    String   @db.ObjectId
-  auth      Auth     @relation(fields: [authId], references: [id])
-  category  String?
-  name      String
-  date      DateTime
-  value     String
-  unit      String
-  note      String?
-  createdAt DateTime @default(now())
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  authId         String   @db.ObjectId
+  auth           Auth     @relation(fields: [authId], references: [id])
+  category       String?
+  name           String
+  date           DateTime
+  value          String
+  unit           String?
+  note           String?
+  /// optional PDF/JPG/PNG attached to the result
+  attachmentUrl  String?
+  attachmentName String?
+  mimeType       String?
+  createdAt      DateTime @default(now())
 }
 
 model Document {
@@ -420,6 +426,7 @@ enum PhotoMilestone {
   STIMS
   TRIGGER
   EGG_RETRIEVAL
+  HAPPY_MOMENTS
   OTHER
 }
 

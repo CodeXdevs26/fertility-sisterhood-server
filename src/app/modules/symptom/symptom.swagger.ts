@@ -1,6 +1,6 @@
 import { crud } from "../../docs/crud.js";
 import { dateTime, obj, optStr } from "../../docs/fields.js";
-import { ok, op, ref } from "../../docs/helpers.js";
+import { ok, op, queryParam, ref } from "../../docs/helpers.js";
 
 const tag = "Symptoms";
 
@@ -25,7 +25,7 @@ export const symptomSwagger = {
       createBody: obj(fields, ["symptomName"]),
       updateBody: obj(fields),
       createDescription:
-        "Only one symptom per day - a second one for the same day returns 409.",
+        "One entry per day: posting for a day that already has an entry updates it (200) instead of creating a new one (201).",
     }),
     "/symptoms/today": {
       get: op({
@@ -34,6 +34,12 @@ export const symptomSwagger = {
         description: "`data` is `null` if nothing was logged today.",
         access: "user",
         premium: true,
+        parameters: [
+          queryParam("date", "The app's local date, YYYY-MM-DD", {
+            type: "string",
+            format: "date",
+          }),
+        ],
         responses: ok("Today's symptom fetched successfully!", {
           ...ref("Symptom"),
           nullable: true,

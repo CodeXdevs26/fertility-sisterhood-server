@@ -20,7 +20,7 @@ export const photoSwagger = {
         tag,
         summary: "Upload a photo",
         description:
-          "Send as `multipart/form-data`. Only JPEG, PNG and WebP up to 5 MB are accepted.",
+          'Send as `multipart/form-data`; fields may be sent flat or as a `payload` JSON string. JPG, PNG, WEBP or HEIC up to 10 MB. `milestone` accepts the labels "Consultations", "Stims", "Trigger time", "Egg retrieval", "Happy moments", "Other memories" or the enum keys (case-insensitive).',
         access: "user",
         premium: true,
         requestBody: formBody(
@@ -29,7 +29,7 @@ export const photoSwagger = {
               file: {
                 type: "string",
                 format: "binary",
-                description: "Image (jpeg, png, webp - max 5 MB)",
+                description: "Image (jpg, png, webp, heic - max 10 MB)",
               },
               caption: str("Day of retrieval"),
               milestone: ref("PhotoMilestone"),
@@ -45,12 +45,16 @@ export const photoSwagger = {
         tag,
         summary: "List my photos",
         description:
-          "List items are a short form: `id`, `caption`, `milestone`, `file`, `fileSize` and `date`. Use `GET /photos/{id}` for the full record.",
+          "List items are a short form: `id`, `caption`, `milestone`, `milestoneLabel`, `file`, `fileSize` and `date`. Use `GET /photos/{id}` for the full record.",
         access: "user",
         premium: true,
         parameters: [
           ...pageParams,
-          queryParam("category", "Filter by milestone", ref("PhotoMilestone")),
+          queryParam(
+            "category",
+            "Filter by milestone (enum key or label, e.g. `Egg retrieval`)",
+            { type: "string" }
+          ),
         ],
         responses: ok(
           "Photos fetched successfully!",
@@ -60,6 +64,7 @@ export const photoSwagger = {
               id: objectId("Photo id"),
               caption: { type: "string" },
               milestone: ref("PhotoMilestone"),
+              milestoneLabel: { type: "string" },
               file: { type: "string", format: "uri" },
               fileSize: { type: "integer" },
               date: dateTime(),
@@ -78,6 +83,30 @@ export const photoSwagger = {
         parameters: [idParam()],
         responses: ok("Photo fetched successfully!", ref("Photo")),
         errors: [404],
+      }),
+      patch: op({
+        tag,
+        summary: "Update a photo",
+        description:
+          "Send as `multipart/form-data` (flat fields or a `payload` JSON string). All parts optional; a new `file` replaces the old image.",
+        access: "user",
+        premium: true,
+        parameters: [idParam()],
+        requestBody: formBody(
+          obj({
+            file: {
+              type: "string",
+              format: "binary",
+              description: "Image (jpg, png, webp, heic - max 10 MB)",
+            },
+            caption: str("Day of retrieval"),
+            milestone: ref("PhotoMilestone"),
+            date: dateTime(),
+          }),
+          false
+        ),
+        responses: ok("Photo updated successfully!", ref("Photo")),
+        errors: [400, 404],
       }),
       delete: op({
         tag,

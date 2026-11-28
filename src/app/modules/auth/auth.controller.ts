@@ -5,7 +5,7 @@ import { authServices } from "./auth.service.js";
 import config from "../../config/index.js";
 import { TRequest } from "../../interface/global.interface.js";
 import pick from "../../utils/pick.js";
-import { TLoginInput } from "./auth.validation.js";
+import { TGoogleLoginInput, TLoginInput } from "./auth.validation.js";
 
 // name kept for existing clients (documented in Swagger)
 export const REFRESH_COOKIE = "player-centralRefreshToken";
@@ -43,6 +43,21 @@ const login = handleAsyncRequest(async (req: Request, res: Response) => {
     // mobile apps have no cookie jar: they get the refresh token in the body
     // and send it back in the `x-refresh-token` header
     data: (req.body as TLoginInput).isMobileApp
+      ? { accessToken, refreshToken }
+      : { accessToken },
+  });
+});
+
+// same response as /login
+const googleLogin = handleAsyncRequest(async (req: Request, res: Response) => {
+  const { refreshToken, accessToken } = await authServices.googleLogin(
+    req.body
+  );
+  setRefreshCookie(res, refreshToken);
+
+  sendResponse(res, {
+    message: "Logged in successfully!",
+    data: (req.body as TGoogleLoginInput).isMobileApp
       ? { accessToken, refreshToken }
       : { accessToken },
   });
@@ -132,6 +147,7 @@ const logout = handleAsyncRequest(async (req: TRequest, res: Response) => {
 export const authController = {
   signup,
   login,
+  googleLogin,
   getSingle,
   getAll,
   resetPassword,

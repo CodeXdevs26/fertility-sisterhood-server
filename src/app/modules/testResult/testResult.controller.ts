@@ -38,6 +38,25 @@ const update = handleAsyncRequest(async (req: TRequest, res: Response) => {
   );
   sendResponse(res, { message: "Test result updated successfully!", data });
 });
+const setAttachment = handleAsyncRequest(
+  async (req: TRequest, res: Response) => {
+    const data = await testResultServices.setAttachment(
+      req.user!.id,
+      req.params.id as string,
+      req.file
+    );
+    sendResponse(res, { message: "Attachment uploaded successfully!", data });
+  }
+);
+const removeAttachment = handleAsyncRequest(
+  async (req: TRequest, res: Response) => {
+    const data = await testResultServices.removeAttachment(
+      req.user!.id,
+      req.params.id as string
+    );
+    sendResponse(res, { message: "Attachment removed successfully!", data });
+  }
+);
 const remove = handleAsyncRequest(async (req: TRequest, res: Response) => {
   const data = await testResultServices.remove(
     req.user!.id,
@@ -51,5 +70,7 @@ export const testResultController = {
   getMy,
   getSingle,
   update,
+  setAttachment,
+  removeAttachment,
   remove,
 };

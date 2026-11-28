@@ -12,8 +12,20 @@ import {
 } from "../../utils/userDay.js";
 import { TCreateSymptom, TUpdateSymptom } from "./symptom.validation.js";
 
+const symptomSelect = {
+  id: true,
+  symptomName: true,
+  moods: true,
+  note: true,
+  date: true,
+};
+
+/**
+ * One symptom entry per calendar day (user's timezone, stored at UTC
+ * midnight). Posting again for a day that already has an entry updates that
+ * entry instead of failing; `created` tells which happened.
+ */
 const create = async (authId: string, payload: TCreateSymptom) => {
-  // one symptom per calendar day in the user's timezone, stored at UTC midnight
   const timeZone = await getUserTimeZone(authId);
   const date = payload.date
     ? toCalendarDay(payload.date, timeZone)
@@ -22,25 +34,27 @@ const create = async (authId: string, payload: TCreateSymptom) => {
     where: { authId, OR: sameDayWhere(date, timeZone) },
     select: { id: true },
   });
-  if (existing)
-    throw new ApiError(409, "A symptom has already been created for this day");
 
-  return prisma.symptom.create({
-    data: {
-      authId,
-      symptomName: payload.symptomName,
-      moods: payload.moods,
-      note: payload.note,
-      date,
-    },
-    select: {
-      id: true,
-      symptomName: true,
-      moods: true,
-      note: true,
-      date: true,
-    },
+  const data = {
+    symptomName: payload.symptomName,
+    moods: payload.moods,
+    note: payload.note,
+    date,
+  };
+  if (existing) {
+    const symptom = await prisma.symptom.update({
+      where: { id: existing.id },
+      data,
+      select: symptomSelect,
+    });
+    return { symptom, created: false };
+  }
+
+  const symptom = await prisma.symptom.create({
+    data: { authId, ...data },
+    select: symptomSelect,
   });
+  return { symptom, created: true };
 };
 
 const getMy = async (authId: string, options: TPaginationOptions) => {
@@ -65,10 +79,14 @@ const getMy = async (authId: string, options: TPaginationOptions) => {
   return { meta: { page, limit: take, total }, symptoms };
 };
 
-const getToday = async (authId: string) => {
+/** Today's entry (or `date`, the app's local "YYYY-MM-DD"); null if none. */
+const getToday = async (authId: string, date?: string) => {
   const timeZone = await getUserTimeZone(authId);
+  const day = date
+    ? new Date(`${date}T00:00:00.000Z`)
+    : getUserToday(timeZone).day;
   return prisma.symptom.findFirst({
-    where: { authId, OR: sameDayWhere(getUserToday(timeZone).day, timeZone) },
+    where: { authId, OR: sameDayWhere(day, timeZone) },
     orderBy: { date: "desc" },
     select: {
       id: true,
@@ -98,7 +116,7 @@ const update = async (authId: string, id: string, payload: TUpdateSymptom) => {
     if (existing)
       throw new ApiError(
         409,
-        "A symptom has already been created for this day"
+        "There is already a symptom entry for this day. Please edit that entry instead."
       );
   }
 

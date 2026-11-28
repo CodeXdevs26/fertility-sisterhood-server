@@ -103,8 +103,15 @@ const globalErrorHandler = (
     message = err.issues[0]?.message || "Validation error!";
     error = err.issues;
 
-    if (error[0].code === "invalid_type") {
-      message = `${error[0].path[0]} must be a ${error[0].expected}!`;
+    // schema-specific messages are kept; only Zod's generic ones are rewritten
+    const isGeneric = /^Invalid (input|option)/.test(error[0].message ?? "");
+    if (!isGeneric) {
+      // keep the schema's own message
+    } else if (error[0].code === "invalid_type") {
+      message =
+        /received undefined$/.test(error[0].message ?? "")
+          ? `${error[0].path[0]} is required!`
+          : `${error[0].path[0]} must be a ${error[0].expected}!`;
     } else if (error[0].code === "invalid_value") {
       const secondPartMessage = `Invalid ${error[0].path[0]}! Expected one of ${error[0].values.join(" | ")}`;
 

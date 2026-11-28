@@ -3,6 +3,7 @@ import validate from "../../middlewares/validate.js";
 import {
   changeAccountStatusZod,
   changePasswordZod,
+  googleLoginZod,
   loginZodSchema,
   resetPasswordZod,
   userSignupZod,
@@ -28,6 +29,13 @@ router.post(
   authLimiter,
   validate(loginZodSchema),
   authController.login
+);
+
+router.post(
+  "/google",
+  authLimiter,
+  validate(googleLoginZod),
+  authController.googleLogin
 );
 
 router.post(

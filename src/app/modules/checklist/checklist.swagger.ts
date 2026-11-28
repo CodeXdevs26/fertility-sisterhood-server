@@ -25,7 +25,7 @@ export const checklistSwagger = {
   tag: {
     name: tag,
     description:
-      "Daily to-do checklist (premium). The first time a user opens their checklist (`GET /checklists` or `/checklists/today`), the admin's default items (Checklist templates) are copied into it once, dated today.",
+      "Daily to-do checklist (premium). The first time a user opens their checklist (`GET /checklists` or `/checklists/today`), the admin's default items (Checklist templates) are copied into it once, dated today (re-seeded if the user has no items). Every item carries `isCompleted` (true when `status` is COMPLETED).",
   },
   paths: {
     "/checklists": {
@@ -45,6 +45,7 @@ export const checklistSwagger = {
               category: ref("ChecklistCategory"),
               date: dateTime(),
               status: ref("ChecklistStatus"),
+              isCompleted: { type: "boolean" },
             },
           },
           201
@@ -81,6 +82,7 @@ export const checklistSwagger = {
               date: dateTime(),
               description: { type: "string", nullable: true },
               status: ref("ChecklistStatus"),
+              isCompleted: { type: "boolean" },
             },
           })
         ),
@@ -90,13 +92,18 @@ export const checklistSwagger = {
     "/checklists/today": {
       get: op({
         tag,
-        summary: "List today's checklist",
+        summary: "List my persistent checklist for today",
         description:
-          "Only items dated today in the user's timezone (`Auth.timezone`, default Europe/London) are returned.",
+          "Returns every item dated on or before today (so unfinished items carry over), sorted by category. Default `limit` is 100. \"Today\" is the `date` query (the app's local date) or, if omitted, the user's timezone day (`Auth.timezone`, default Europe/London). Each item: `id`, `title`, `category`, `date`, `description`, `status`, `isCompleted`.",
         access: "user",
         premium: true,
         parameters: [
           ...pageParams,
+          queryParam("date", "The app's local date, YYYY-MM-DD", {
+            type: "string",
+            format: "date",
+            example: "2026-05-01",
+          }),
           queryParam(
             "category",
             "Filter by category",
@@ -129,12 +136,17 @@ export const checklistSwagger = {
       patch: op({
         tag,
         summary: "Update checklist item",
-        description: "All fields optional.",
+        description:
+          "All fields optional. `isCompleted: true` sets status COMPLETED, `false` sets PENDING.",
         access: "user",
         premium: true,
         parameters: [idParam()],
         requestBody: jsonBody(
-          obj({ ...fields, status: ref("ChecklistStatus") })
+          obj({
+            ...fields,
+            status: ref("ChecklistStatus"),
+            isCompleted: { type: "boolean", example: true },
+          })
         ),
         responses: ok("Checklist item updated successfully!", ref("Checklist")),
         errors: [404],

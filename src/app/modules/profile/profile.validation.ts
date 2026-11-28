@@ -20,9 +20,11 @@ export const updateConsentZod = z.object({
 export type TUpdateConsent = z.infer<typeof updateConsentZod>;
 
 export const deleteAccountZod = z.object({
+  // required for email accounts; Google sign-in accounts have no password
   password: z
     .string({ message: "Password is required" })
-    .min(1, "Password is required"),
+    .min(1, "Password is required")
+    .optional(),
 });
 
 export type TDeleteAccount = z.infer<typeof deleteAccountZod>;

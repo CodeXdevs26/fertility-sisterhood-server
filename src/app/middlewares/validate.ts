@@ -1,8 +1,12 @@
 import { NextFunction, Request, Response } from "express";
 import { ZodTypeAny } from "zod";
+import ApiError from "../classes/ApiError.js";
 
 type TValidateOptions = {
-  /** multipart: parse `req.body.payload` (JSON string) and replace `req.body` */
+  /**
+   * multipart: validate `req.body.payload` (JSON string) when sent, else the
+   * flat form fields; replaces `req.body` either way
+   */
   formData?: boolean;
   /** validate `req.query` instead of the body and put the parsed values back */
   query?: boolean;
@@ -32,11 +36,17 @@ const validate =
           enumerable: true,
         });
       } else if (formData) {
-        if (req?.body?.payload) {
-          req.body = await schema.parseAsync(
-            JSON.parse(req?.body?.payload || "{}")
-          );
+        // multipart: fields as a `payload` JSON string, or as flat fields
+        const raw = req?.body?.payload;
+        let body: unknown = req.body ?? {};
+        if (typeof raw === "string" && raw.trim()) {
+          try {
+            body = JSON.parse(raw);
+          } catch {
+            throw new ApiError(400, "payload must be a valid JSON string");
+          }
         }
+        req.body = await schema.parseAsync(body);
       } else {
         // Always replace the body with the parsed result: unknown keys are
         // stripped (services spread payloads into Prisma, so an unstripped

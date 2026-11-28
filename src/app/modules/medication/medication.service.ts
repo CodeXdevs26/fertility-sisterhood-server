@@ -56,11 +56,7 @@ const getMy = async (authId: string, options: TPaginationOptions) => {
       take,
       orderBy: { createdAt: "desc" },
       select: {
-        id: true,
-        name: true,
-        dose: true,
-        frequency: true,
-        reminderTimes: true,
+        ...medicationSelect,
         medicationChecklists: {
           where: { date: today },
           select: { id: true },

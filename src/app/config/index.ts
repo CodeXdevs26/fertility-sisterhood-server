@@ -10,6 +10,9 @@ export default {
   trustProxy: process.env.TRUST_PROXY || "loopback",
   email: {
     emailSendingApi: process.env.SEND_EMAIL_URL,
+    // sender, e.g. "Fertility Sisterhood <hello@example.com>"; sent as `from`
+    // when set (the email service must support it)
+    from: process.env.EMAIL_FROM,
   },
   jwt: {
     accessSecret: process.env.JWT_ACCESS_SECRET,
@@ -39,6 +42,13 @@ export default {
     enableTestPurchase:
       process.env.ENABLE_TEST_PURCHASE === "true" &&
       process.env.NODE_ENV !== "production",
+  },
+  google: {
+    // OAuth client IDs (iOS, Android, web) whose ID tokens are accepted
+    clientIds: (process.env.GOOGLE_CLIENT_IDS ?? "")
+      .split(",")
+      .map(id => id.trim())
+      .filter(Boolean),
   },
   firebase: {
     projectId: process.env.FIREBASE_PROJECT_ID,

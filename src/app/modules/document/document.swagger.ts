@@ -30,7 +30,7 @@ export const documentSwagger = {
         tag,
         summary: "Upload a document",
         description:
-          "Send as `multipart/form-data`. The `file` part is required.",
+          "Send as `multipart/form-data`. The `file` part is required; other fields may be sent flat or as a `payload` JSON string.",
         access: "user",
         premium: true,
         requestBody: formBody(obj({ file, ...fields }, ["file"])),
@@ -62,7 +62,7 @@ export const documentSwagger = {
         tag,
         summary: "Update a document",
         description:
-          "Send as `multipart/form-data`. All parts optional; sending a new `file` replaces the old one.",
+          "Send as `multipart/form-data`. All parts optional (fields flat or as a `payload` JSON string); sending a new `file` replaces the old one.",
         access: "user",
         premium: true,
         parameters: [idParam()],

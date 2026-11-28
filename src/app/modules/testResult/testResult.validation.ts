@@ -1,14 +1,24 @@
 import { z } from "zod";
 
-export const createTestResultZod = z.object({
+// optional free text; "" or null clears it
+const unitZod = z
+  .string()
+  .trim()
+  .nullable()
+  .optional()
+  .transform(value => (value === "" ? null : value));
+
+const testResultFields = {
   category: z.string().trim().min(1).optional(),
-  name: z.string().trim().min(1),
-  date: z.coerce.date(),
-  value: z.string().trim().min(1),
-  unit: z.string().trim().min(1),
+  name: z.string({ message: "Test name is required" }).trim().min(1, "Test name is required"),
+  date: z.coerce.date({ message: "date must be a valid date (YYYY-MM-DD)" }),
+  value: z.string({ message: "Result value is required" }).trim().min(1, "Result value is required"),
+  unit: unitZod,
   note: z.string().trim().optional(),
-});
-export const updateTestResultZod = createTestResultZod.partial();
+};
+
+export const createTestResultZod = z.object(testResultFields);
+export const updateTestResultZod = z.object(testResultFields).partial();
 export const testResultQueryZod = z.object({
   category: z.string().trim().min(1).optional(),
 });

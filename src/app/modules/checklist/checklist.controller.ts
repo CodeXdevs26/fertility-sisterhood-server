@@ -28,11 +28,10 @@ const getMy = handleAsyncRequest(async (req: TRequest, res: Response) => {
 });
 
 const getToday = handleAsyncRequest(async (req: TRequest, res: Response) => {
-  const { category } = req.query as TChecklistQuery;
   const data = await checklistServices.getToday(
     req.user!.id,
     pick(req.query, ["page", "limit"]),
-    category
+    req.query as TChecklistQuery
   );
   sendResponse(res, {
     message: "Today's checklist fetched successfully!",

@@ -51,6 +51,40 @@ export const authSwagger = {
         errors: [400, 429],
       }),
     },
+    "/auth/google": {
+      post: op({
+        tag,
+        summary: "Sign in with Google",
+        description:
+          "Verifies the Google `idToken` and logs the user in (creating the account on first use). The response is identical to `POST /auth/login`: `accessToken`, plus `refreshToken` when `isMobileApp: true`. Errors: 401 invalid token, 400 unverified Google email / blocked / deleted / admin account, 503 Google sign-in not configured. Rate-limited.",
+        requestBody: jsonBody(
+          obj(
+            {
+              idToken: str("eyJhbGciOiJSUzI1NiIs...", "Google ID token"),
+              fcmToken: optStr("fcm-device-token"),
+              timezone: optStr("Asia/Dhaka", "IANA timezone of the device"),
+              isMobileApp: {
+                type: "boolean",
+                default: false,
+                description: "`true` also returns `refreshToken` in the body",
+              },
+            },
+            ["idToken"]
+          )
+        ),
+        responses: ok("Logged in successfully!", {
+          type: "object",
+          properties: {
+            accessToken: { type: "string", example: "eyJhbGciOiJIUzI1NiIs..." },
+            refreshToken: {
+              type: "string",
+              description: "Only when `isMobileApp: true`",
+            },
+          },
+        }),
+        errors: [400, 401, 429, 503],
+      }),
+    },
     "/auth/login": {
       post: op({
         tag,

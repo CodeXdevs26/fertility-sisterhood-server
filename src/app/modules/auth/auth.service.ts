@@ -12,11 +12,14 @@ import ApiError from "../../classes/ApiError.js";
 import {
   createNotification,
   notify,
+  notifyAdmins,
 } from "../notification/notification.utils.js";
+import { verifyGoogleIdToken } from "../../utils/googleAuth.js";
 import prisma from "../../utils/prisma.js";
 import { sendEmail } from "../../utils/sendEmail.js";
 import {
   TChangePasswordInput,
+  TGoogleLoginInput,
   TLoginInput,
   TResetPasswordInput,
   TSignup,
@@ -128,12 +131,25 @@ const login = async (payload: TLoginInput) => {
     throw new ApiError(400, "Your account is blocked!");
 
   if (auth.loginProvider === LoginProvider.GOOGLE)
-    throw new ApiError(400, "Your account was created using Google!");
+    throw new ApiError(
+      400,
+      "This account uses Google sign-in. Please continue with Google."
+    );
 
   const hasMatched = await bcrypt.compare(payload.password, auth.password);
   if (!hasMatched) throw new ApiError(400, "Invalid email or password!");
 
-  // prepare tokens
+  await saveDevice(auth.id, payload);
+  return issueTokens(auth);
+};
+
+/** Access + refresh token pair (both carry `tv`, see authorize). */
+const issueTokens = (auth: {
+  id: string;
+  email: string;
+  role: UserRole;
+  tokenVersion: number | null;
+}) => {
   const jwtPayload = {
     email: auth.email,
     role: auth.role,
@@ -144,45 +160,117 @@ const login = async (payload: TLoginInput) => {
   const accessToken = jsonwebtoken.sign(
     jwtPayload,
     config.jwt.accessSecret as Secret,
-    {
-      expiresIn: config.jwt.accessExpiration as any,
-    }
+    { expiresIn: config.jwt.accessExpiration as any }
   );
-
   const refreshToken = jsonwebtoken.sign(
     jwtPayload,
     config.jwt.refreshSecret as Secret,
-    {
-      expiresIn: config.jwt.refreshExpiration as any,
-    }
+    { expiresIn: config.jwt.refreshExpiration as any }
   );
 
-  // save the device's fcmToken / timezone. A device token belongs to one
-  // account at a time, so remove it from whoever logged in on this device before.
-  if (payload.fcmToken || payload.timezone) {
-    await prisma.$transaction([
-      ...(payload.fcmToken
-        ? [
-            prisma.auth.updateMany({
-              where: { fcmToken: payload.fcmToken, id: { not: auth.id } },
-              data: { fcmToken: null },
-            }),
-          ]
-        : []),
-      prisma.auth.update({
+  return { accessToken, refreshToken };
+};
+
+/**
+ * Saves the device's fcmToken / timezone. A device token belongs to one
+ * account at a time, so it is removed from whoever logged in on this device
+ * before.
+ */
+const saveDevice = async (
+  authId: string,
+  device: { fcmToken?: string; timezone?: string }
+) => {
+  if (!device.fcmToken && !device.timezone) return;
+  await prisma.$transaction([
+    ...(device.fcmToken
+      ? [
+          prisma.auth.updateMany({
+            where: { fcmToken: device.fcmToken, id: { not: authId } },
+            data: { fcmToken: null },
+          }),
+        ]
+      : []),
+    prisma.auth.update({
+      where: { id: authId },
+      data: {
+        ...(device.fcmToken ? { fcmToken: device.fcmToken } : {}),
+        ...(device.timezone ? { timezone: device.timezone } : {}),
+      },
+    }),
+  ]);
+};
+
+/** An unusable password for accounts that only sign in with Google. */
+const randomPasswordHash = () =>
+  bcrypt.hash(crypto.randomBytes(32).toString("hex"), 10);
+
+/**
+ * POST /auth/google: signs in with a Google ID token; same tokens as /login.
+ * - New email: creates an ACTIVE user (Google already verified the email).
+ * - Existing email: signs in to that account (linked by email).
+ *   A still-unverified (PENDING) email signup is taken over: it is
+ *   activated and its password replaced, since whoever created it never
+ *   proved they own the address.
+ */
+const googleLogin = async (payload: TGoogleLoginInput) => {
+  const google = await verifyGoogleIdToken(payload.idToken);
+
+  let auth = await prisma.auth.findUnique({ where: { email: google.email } });
+
+  if (auth) {
+    if (auth.role === UserRole.ADMIN)
+      throw new ApiError(400, "Admin accounts cannot sign in with Google.");
+    if (auth.status === UserStatus.BLOCKED)
+      throw new ApiError(400, "Your account is blocked!");
+    if (auth.status === UserStatus.DELETED)
+      throw new ApiError(400, "This account has been deleted.");
+
+    if (auth.status === UserStatus.PENDING) {
+      auth = await prisma.auth.update({
         where: { id: auth.id },
         data: {
-          ...(payload.fcmToken ? { fcmToken: payload.fcmToken } : {}),
-          ...(payload.timezone ? { timezone: payload.timezone } : {}),
+          status: UserStatus.ACTIVE,
+          loginProvider: LoginProvider.GOOGLE,
+          password: await randomPasswordHash(),
+          tokenVersion: (auth.tokenVersion ?? 0) + 1,
         },
-      }),
-    ]);
+      });
+      await prisma.oTP.deleteMany({ where: { authId: auth.id } });
+      onNewUser(auth);
+    }
+  } else {
+    auth = await prisma.auth.create({
+      data: {
+        email: google.email,
+        name: google.name?.trim() || google.email.split("@")[0] || "User",
+        password: await randomPasswordHash(),
+        role: UserRole.USER,
+        status: UserStatus.ACTIVE,
+        loginProvider: LoginProvider.GOOGLE,
+      },
+    });
+    onNewUser(auth);
   }
 
-  return {
-    accessToken,
-    refreshToken,
-  };
+  await saveDevice(auth.id, payload);
+  return issueTokens(auth);
+};
+
+/** Same side effects as finishing an email signup (OTP verification). */
+const onNewUser = (auth: { id: string; name: string; email: string }) => {
+  sendEmail(
+    auth.email,
+    "Welcome to Fertility Sisterhood! Your Email is Verified",
+    "./src/app/emailTemplates/verificationSuccess.html",
+    { name: auth.name || "there" }
+  );
+  notifyAdmins({
+    message: "New user",
+    description: `${auth.name} (${auth.email}) joined Fertility Sisterhood`,
+    modelType: NotificationModelType.NEW_USER,
+    referenceId: auth.id,
+    dedupeKey: `admin-new-user:${auth.id}`,
+  });
 };
 
 const getAll = async (
@@ -398,6 +486,12 @@ const changePassword = async (
     },
   });
 
+  if (auth.loginProvider === LoginProvider.GOOGLE)
+    throw new ApiError(
+      400,
+      "This account uses Google sign-in and has no password to change."
+    );
+
   const hasMatched = await bcrypt.compare(payload.oldPassword, auth.password);
   if (!hasMatched) {
     throw new ApiError(400, "Old password is incorrect!");
@@ -552,6 +646,7 @@ export const authServices = {
   logout,
   signUp,
   login,
+  googleLogin,
   getSingle,
   getAll,
   refreshToken,

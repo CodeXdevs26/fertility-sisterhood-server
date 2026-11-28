@@ -1,5 +1,5 @@
 import bcrypt from "bcrypt";
-import { SubscriptionStatus, UserRole } from "@prisma/client";
+import { LoginProvider, SubscriptionStatus, UserRole } from "@prisma/client";
 import ApiError from "../../classes/ApiError.js";
 import prisma from "../../utils/prisma.js";
 import { safeDeleteFromS3 } from "../../utils/awss3.js";
@@ -119,17 +119,25 @@ const updateConsent = async (authId: string, payload: TUpdateConsent) => {
 const deleteAccount = async (authId: string, payload: TDeleteAccount) => {
   const auth = await prisma.auth.findUnique({
     where: { id: authId },
-    select: { id: true, role: true, password: true },
+    select: { id: true, role: true, password: true, loginProvider: true },
   });
   if (!auth) throw new ApiError(404, "User not found!");
   if (auth.role === UserRole.ADMIN)
     throw new ApiError(400, "Admin account cannot be deleted!");
-  if (!(await bcrypt.compare(payload.password, auth.password)))
-    throw new ApiError(400, "Password is incorrect!");
+  // Google sign-in accounts have no usable password: the valid token is enough
+  if (auth.loginProvider !== LoginProvider.GOOGLE) {
+    if (!payload.password) throw new ApiError(400, "Password is required");
+    if (!(await bcrypt.compare(payload.password, auth.password)))
+      throw new ApiError(400, "Password is incorrect!");
+  }
 
-  const [documents, photos] = await Promise.all([
+  const [documents, photos, attachments] = await Promise.all([
     prisma.document.findMany({ where: { authId }, select: { file: true } }),
     prisma.photo.findMany({ where: { authId }, select: { file: true } }),
+    prisma.testResult.findMany({
+      where: { authId, attachmentUrl: { not: null } },
+      select: { attachmentUrl: true },
+    }),
   ]);
 
   // children first: MongoDB has no cascading deletes
@@ -167,7 +175,11 @@ const deleteAccount = async (authId: string, payload: TDeleteAccount) => {
 
   // after the DB commit; failures are logged, never block the deletion
   await Promise.all(
-    [...documents, ...photos].map(({ file }) => safeDeleteFromS3(file))
+    [
+      ...documents.map(({ file }) => file),
+      ...photos.map(({ file }) => file),
+      ...attachments.map(({ attachmentUrl }) => attachmentUrl),
+    ].map(url => safeDeleteFromS3(url))
   );
   await deleteSubscriber(authId);
 };

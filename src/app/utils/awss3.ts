@@ -33,25 +33,65 @@ export const upload = multer({
   limits: { fileSize: MAX_FILE_SIZE },
 });
 
-const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+// heic/heif: photos straight from an iPhone camera
+const ALLOWED_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
+export const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
 
 export const uploadImage = multer({
   storage: memoryStorage(),
   limits: { fileSize: MAX_IMAGE_SIZE },
   fileFilter: (_req, file, cb) => {
     if (!ALLOWED_IMAGE_TYPES.has(file.mimetype)) {
-      cb(new ApiError(400, "Only jpeg, png, and webp images are allowed"));
+      cb(
+        new ApiError(
+          400,
+          "Only JPG, PNG, WEBP and HEIC images are allowed (max 10 MB)"
+        )
+      );
       return;
     }
     cb(null, true);
   },
 });
 
+/** Test result attachments: a PDF or an image. */
+const ALLOWED_ATTACHMENT_TYPES = new Set([
+  "application/pdf",
+  ...ALLOWED_IMAGE_TYPES,
+]);
+export const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+
+export const uploadAttachment = multer({
+  storage: memoryStorage(),
+  limits: { fileSize: MAX_ATTACHMENT_SIZE },
+  fileFilter: (_req, file, cb) => {
+    if (!ALLOWED_ATTACHMENT_TYPES.has(file.mimetype)) {
+      cb(
+        new ApiError(
+          400,
+          "Only PDF, JPG, PNG, WEBP and HEIC files are allowed (max 10 MB)"
+        )
+      );
+      return;
+    }
+    cb(null, true);
+  },
+});
+
+/** URL-safe object key part: spaces and other characters become "-". */
+const safeFileName = (name: string) =>
+  name.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "file";
+
 //upload a single file
 export const uploadToS3 = async (file: TFile): Promise<string> => {
   if (!file) throw new ApiError(400, "File is required");
-  const fileName = `fertility-sisterhood/${Date.now()}-${file.originalname}`;
+  const fileName = `fertility-sisterhood/${Date.now()}-${safeFileName(file.originalname)}`;
 
   const command = new PutObjectCommand({
     Bucket: config.aws.bucket,
@@ -70,8 +110,13 @@ export const uploadToS3 = async (file: TFile): Promise<string> => {
 
     return url;
   } catch (error) {
-    console.log(error);
-    throw new ApiError(400, "File Upload failed");
+    if (error instanceof ApiError) throw error;
+    // storage/credential problem on our side, not the user's file
+    console.error("S3 upload failed:", error);
+    throw new ApiError(
+      503,
+      "We couldn't upload your file right now. Please try again later."
+    );
   }
 };
 

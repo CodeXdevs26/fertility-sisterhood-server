@@ -188,6 +188,9 @@ const sectionFetchers: Record<
         value: true,
         unit: true,
         note: true,
+        attachmentUrl: true,
+        attachmentName: true,
+        mimeType: true,
       },
     }),
 

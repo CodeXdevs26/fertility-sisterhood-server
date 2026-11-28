@@ -50,6 +50,10 @@ const getMy = async (authId: string, options: TPaginationOptions) => {
         name: true,
         dose: true,
         frequency: true,
+        type: true,
+        startDate: true,
+        endDate: true,
+        createdAt: true,
         supplementChecklists: {
           where: { date: today },
           select: { id: true },

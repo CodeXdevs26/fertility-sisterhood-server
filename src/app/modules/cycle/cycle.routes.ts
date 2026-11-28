@@ -6,14 +6,25 @@ import validate from "../../middlewares/validate.js";
 import { cycleController } from "./cycle.controller.js";
 import {
   createCycleZod,
+  cycleListQueryZod,
   cycleMonthQueryZod,
+  cycleTodayQueryZod,
   updateCycleZod,
 } from "./cycle.validation.js";
 
 const router = Router();
 router.use(authorize(UserRole.USER), requirePremium);
 router.post("/", validate(createCycleZod), cycleController.create);
-router.get("/", cycleController.getMy);
+router.get(
+  "/",
+  validate(cycleListQueryZod, { query: true }),
+  cycleController.getMy
+);
+router.get(
+  "/today",
+  validate(cycleTodayQueryZod, { query: true }),
+  cycleController.getToday
+);
 router.get(
   "/by-date",
   validate(cycleMonthQueryZod, { query: true }),

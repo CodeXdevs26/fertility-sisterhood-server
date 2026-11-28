@@ -3,6 +3,7 @@ import { UserRole } from "@prisma/client";
 import authorize from "../../middlewares/authorize.js";
 import requirePremium from "../../middlewares/requirePremium.js";
 import validate from "../../middlewares/validate.js";
+import { uploadAttachment } from "../../utils/awss3.js";
 import { testResultController } from "./testResult.controller.js";
 import {
   createTestResultZod,
@@ -24,6 +25,12 @@ router.patch(
   validate(updateTestResultZod),
   testResultController.update
 );
+router.post(
+  "/:id/attachment",
+  uploadAttachment.single("attachment"),
+  testResultController.setAttachment
+);
+router.delete("/:id/attachment", testResultController.removeAttachment);
 router.delete("/:id", testResultController.remove);
 
 export const testResultRoutes = router;

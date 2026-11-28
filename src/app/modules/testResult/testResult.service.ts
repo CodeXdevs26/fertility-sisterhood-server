@@ -1,4 +1,6 @@
 import ApiError from "../../classes/ApiError.js";
+import { TFile } from "../../interface/file.interface.js";
+import { safeDeleteFromS3, uploadToS3 } from "../../utils/awss3.js";
 import {
   calculatePagination,
   TPaginationOptions,
@@ -9,19 +11,33 @@ import {
   TUpdateTestResult,
 } from "./testResult.validation.js";
 
+const testResultSelect = {
+  id: true,
+  category: true,
+  name: true,
+  date: true,
+  value: true,
+  unit: true,
+  note: true,
+  attachmentUrl: true,
+  attachmentName: true,
+  mimeType: true,
+  createdAt: true,
+};
+
+const findOwnOrThrow = async (authId: string, id: string) => {
+  const testResult = await prisma.testResult.findFirst({
+    where: { id, authId },
+    select: { id: true, attachmentUrl: true },
+  });
+  if (!testResult) throw new ApiError(404, "Test result not found");
+  return testResult;
+};
+
 const create = async (authId: string, payload: TCreateTestResult) =>
   prisma.testResult.create({
     data: { authId, ...payload },
-    select: {
-      id: true,
-      name: true,
-      date: true,
-      value: true,
-      unit: true,
-      note: true,
-      category: true,
-      createdAt: true,
-    },
+    select: testResultSelect,
   });
 
 const getMy = async (
@@ -37,14 +53,7 @@ const getMy = async (
       skip,
       take,
       orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        name: true,
-        date: true,
-        value: true,
-        unit: true,
-        createdAt: true,
-      },
+      select: testResultSelect,
     }),
     prisma.testResult.count({ where }),
   ]);
@@ -54,16 +63,7 @@ const getMy = async (
 const getSingle = async (authId: string, id: string) => {
   const testResult = await prisma.testResult.findFirst({
     where: { id, authId },
-    select: {
-      id: true,
-      category: true,
-      name: true,
-      date: true,
-      value: true,
-      unit: true,
-      note: true,
-      createdAt: true,
-    },
+    select: testResultSelect,
   });
   if (!testResult) throw new ApiError(404, "Test result not found");
   return testResult;
@@ -74,37 +74,70 @@ const update = async (
   id: string,
   payload: TUpdateTestResult
 ) => {
-  const testResult = await prisma.testResult.findFirst({
-    where: { id, authId },
-    select: { id: true },
-  });
-  if (!testResult) throw new ApiError(404, "Test result not found");
+  await findOwnOrThrow(authId, id);
   return prisma.testResult.update({
     where: { id },
     data: payload,
-    select: {
-      id: true,
-      category: true,
-      name: true,
-      date: true,
-      value: true,
-      unit: true,
-      note: true,
-      createdAt: true,
-    },
+    select: testResultSelect,
   });
+};
+
+/** Adds or replaces the result's attachment (PDF / image). */
+const setAttachment = async (authId: string, id: string, file?: TFile) => {
+  if (!file)
+    throw new ApiError(
+      400,
+      "Please attach a file in the 'attachment' field (PDF, JPG, PNG, WEBP or HEIC)"
+    );
+  const testResult = await findOwnOrThrow(authId, id);
+
+  const attachmentUrl = await uploadToS3(file);
+  let updated;
+  try {
+    updated = await prisma.testResult.update({
+      where: { id },
+      data: {
+        attachmentUrl,
+        attachmentName: file.originalname,
+        mimeType: file.mimetype,
+      },
+      select: testResultSelect,
+    });
+  } catch (error) {
+    await safeDeleteFromS3(attachmentUrl); // don't orphan the upload
+    throw error;
+  }
+  await safeDeleteFromS3(testResult.attachmentUrl);
+  return updated;
+};
+
+const removeAttachment = async (authId: string, id: string) => {
+  const testResult = await findOwnOrThrow(authId, id);
+  const updated = await prisma.testResult.update({
+    where: { id },
+    data: { attachmentUrl: null, attachmentName: null, mimeType: null },
+    select: testResultSelect,
+  });
+  await safeDeleteFromS3(testResult.attachmentUrl);
+  return updated;
 };
 
 const remove = async (authId: string, id: string) => {
-  const testResult = await prisma.testResult.findFirst({
-    where: { id, authId },
-    select: { id: true },
-  });
-  if (!testResult) throw new ApiError(404, "Test result not found");
-  return prisma.testResult.delete({
+  await findOwnOrThrow(authId, id);
+  const deleted = await prisma.testResult.delete({
     where: { id },
-    select: { id: true, name: true, date: true, value: true, unit: true },
+    select: testResultSelect,
   });
+  await safeDeleteFromS3(deleted.attachmentUrl);
+  return deleted;
 };
 
-export const testResultServices = { create, getMy, getSingle, update, remove };
+export const testResultServices = {
+  create,
+  getMy,
+  getSingle,
+  update,
+  setAttachment,
+  removeAttachment,
+  remove,
+};

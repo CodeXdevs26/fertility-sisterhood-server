@@ -1,4 +1,4 @@
-import { obj, str } from "../../docs/fields.js";
+import { obj, optStr, str } from "../../docs/fields.js";
 
 const bool = (example: boolean) => ({ type: "boolean", example });
 import { jsonBody, ok, op, ref } from "../../docs/helpers.js";
@@ -39,10 +39,15 @@ export const profileSwagger = {
         tag,
         summary: "Delete my account permanently",
         description:
-          "UK GDPR right to erasure. Confirms with the password, then permanently deletes the account and all its data: trackers, uploaded documents and photos (also from S3), notifications, support requests and the subscription record. Payment records are kept for accounting but no longer linked to the user. The refresh cookie is cleared. **A store subscription is not cancelled**: the user must cancel it in the App Store / Play Store first. Admin accounts cannot be deleted.",
+          "UK GDPR right to erasure. Confirms with the password (required for email accounts, optional for Google sign-in accounts), then permanently deletes the account and all its data: trackers, uploaded documents and photos (also from S3), notifications, support requests and the subscription record. Payment records are kept for accounting but no longer linked to the user. The refresh cookie is cleared. **A store subscription is not cancelled**: the user must cancel it in the App Store / Play Store first. Admin accounts cannot be deleted.",
         access: "user",
         requestBody: jsonBody(
-          obj({ password: str("Secret@123", "Current password") }, ["password"])
+          obj({
+            password: optStr(
+              "Secret@123",
+              "Current password. Required for email accounts, optional for Google sign-in accounts."
+            ),
+          })
         ),
         responses: ok("Account deleted successfully!"),
         errors: [400, 404, 429],

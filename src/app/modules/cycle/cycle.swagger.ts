@@ -27,6 +27,15 @@ const cyclePeriod = {
     "Cycle length in days. `endDate = startDate + cyclePeriod - 1`. Omit for an ongoing cycle.",
 };
 
+const periodLength = {
+  type: "integer",
+  minimum: 1,
+  maximum: 31,
+  example: 5,
+  description:
+    "Period (bleeding) days at the start of the cycle. Must be <= `cyclePeriod`.",
+};
+
 const cycleDayItem = {
   type: "object",
   properties: {
@@ -34,6 +43,7 @@ const cycleDayItem = {
     cycleDay: { type: "integer", example: 2 },
     cycleNumber: { type: "integer", example: 1 },
     cycleId: { type: "string", example: ID_EXAMPLE },
+    isPeriodDay: { type: "boolean", example: true },
   },
 };
 
@@ -48,11 +58,16 @@ export const cycleSwagger = {
         tag,
         summary: "Create cycle",
         description:
-          "Cycles of a user cannot overlap (`409`). If an **ongoing** cycle (no `cyclePeriod`) started earlier, it is closed automatically the day before the new cycle starts.",
+          'One cycle per calendar month: if a cycle already starts in the same month it is updated instead (200 "Cycle for this month updated successfully!"), otherwise a new one is created (201). Cycles of a user cannot overlap (`409`). If an **ongoing** cycle (no `cyclePeriod`) started earlier, it is closed automatically the day before the new cycle starts.',
         access: "user",
         premium: true,
-        requestBody: jsonBody(obj({ startDate, cyclePeriod }, ["startDate"])),
-        responses: ok("Cycle created successfully!", ref("Cycle"), 201),
+        requestBody: jsonBody(
+          obj({ startDate, cyclePeriod, periodLength }, ["startDate"])
+        ),
+        responses: {
+          ...ok("Cycle created successfully!", ref("Cycle"), 201),
+          ...ok("Cycle for this month updated successfully!", ref("Cycle")),
+        },
         errors: [409],
       }),
       get: op({
@@ -61,6 +76,13 @@ export const cycleSwagger = {
         description: "All cycles, newest first. No pagination.",
         access: "user",
         premium: true,
+        parameters: [
+          queryParam(
+            "month",
+            "Only the cycle starting in this month (YYYY-MM)",
+            { type: "string", example: "2025-12" }
+          ),
+        ],
         responses: ok("Cycles fetched successfully!", {
           type: "array",
           items: ref("Cycle"),
@@ -72,22 +94,55 @@ export const cycleSwagger = {
         tag,
         summary: "Get cycle days of a month (calendar)",
         description:
-          "Returns only the days of the month that fall inside a cycle, each with its `cycleDay` (CD) and `cycleNumber`. Ongoing cycles are filled up to today. Empty array if there is no cycle in that month.",
+          "Returns only the days of the month that fall inside a cycle, each with its `cycleDay` (CD) and `cycleNumber`. Ongoing cycles are filled up to today. Each day has `isPeriodDay`. Empty array if there is no cycle in that month.",
         access: "user",
         premium: true,
         parameters: [
           queryParam(
             "date",
-            "Month in YYYY-MM format. Defaults to the current month.",
+            "Month in YYYY-MM format (`month` is accepted as an alias). Defaults to the current month.",
             {
               type: "string",
               example: "2025-12",
             }
           ),
+          queryParam("month", "Alias of `date` (YYYY-MM)", {
+            type: "string",
+            example: "2025-12",
+          }),
         ],
         responses: ok("Cycle days fetched successfully!", {
           type: "array",
           items: cycleDayItem,
+        }),
+        errors: [422],
+      }),
+    },
+    "/cycles/today": {
+      get: op({
+        tag,
+        summary: "Get today's cycle day",
+        description:
+          "`data` is `null` (still 200) when no cycle covers the day.",
+        access: "user",
+        premium: true,
+        parameters: [
+          queryParam("date", "The app's local date, YYYY-MM-DD", {
+            type: "string",
+            format: "date",
+            example: "2025-12-01",
+          }),
+        ],
+        responses: ok("Today's cycle day fetched successfully!", {
+          type: "object",
+          nullable: true,
+          properties: {
+            date: { type: "string", format: "date", example: "2025-12-01" },
+            cycleDay: { type: "integer", example: 2 },
+            cycleNumber: { type: "integer", example: 1 },
+            isPeriodDay: { type: "boolean", example: true },
+            cycle: ref("Cycle"),
+          },
         }),
         errors: [422],
       }),
@@ -97,15 +152,19 @@ export const cycleSwagger = {
         tag,
         summary: "Update cycle",
         description:
-          "All fields optional. Send `cyclePeriod: null` to make the cycle ongoing again. `endDate` is recalculated.",
+          "All fields optional. Send `cyclePeriod: null` to make the cycle ongoing again. `endDate` is recalculated. Moving `startDate` into a month that already has another cycle returns 400.",
         access: "user",
         premium: true,
         parameters: [idParam()],
         requestBody: jsonBody(
-          obj({ startDate, cyclePeriod: { ...cyclePeriod, nullable: true } })
+          obj({
+            startDate,
+            cyclePeriod: { ...cyclePeriod, nullable: true },
+            periodLength: { ...periodLength, nullable: true },
+          })
         ),
         responses: ok("Cycle updated successfully!", ref("Cycle")),
-        errors: [404, 409],
+        errors: [400, 404, 409],
       }),
       delete: op({
         tag,

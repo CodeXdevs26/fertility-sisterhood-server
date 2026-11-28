@@ -38,7 +38,12 @@ export const sendEmail = async (
       key in values ? escapeHtml(String(values[key])) : match
     );
 
-    await axios.post(config.email.emailSendingApi, { to, subject, html });
+    await axios.post(config.email.emailSendingApi, {
+      to,
+      subject,
+      html,
+      ...(config.email.from ? { from: config.email.from } : {}),
+    });
   } catch (error) {
     console.error(
       `Failed to send email "${subject}":`,

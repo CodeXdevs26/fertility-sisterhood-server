@@ -22,3 +22,15 @@ export const phoneZod = z
   .regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format")
   .nullish()
   .transform(val => val ?? null);
+
+const isRealDay = (value: string) => {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+};
+
+/** A plain calendar day, "YYYY-MM-DD" (e.g. the app's local today). */
+export const localDayZod = (name: string) =>
+  z
+    .string({ message: `${name} is required` })
+    .regex(/^\d{4}-\d{2}-\d{2}$/, `${name} must be in YYYY-MM-DD format`)
+    .refine(isRealDay, `${name} is not a valid date`);

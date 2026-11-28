@@ -16,7 +16,7 @@ router.use(authorize(UserRole.USER), requirePremium);
 router.post(
   "/",
   upload.single("file"),
-  validate(createDocumentZod),
+  validate(createDocumentZod, { formData: true }),
   documentController.create
 );
 router.get(
@@ -27,7 +27,7 @@ router.get(
 router.patch(
   "/:id",
   upload.single("file"),
-  validate(updateDocumentZod),
+  validate(updateDocumentZod, { formData: true }),
   documentController.update
 );
 router.delete("/:id", documentController.remove);
