@@ -194,6 +194,8 @@ Sync 502 দিলে RevenueCat সাময়িকভাবে পৌঁছ�
 
 App খোলার সময় আর foreground-এ ফিরলে `GET /subscriptions/my` দেখুন। `data` `null` হলে ইউজার কখনো কেনেননি।
 
+`GET /profile`-এর `isPremiumUser` field-ও একই জিনিস দেখায়। এটা `true` হয় যখন `Subscription.status` `ACTIVE`, আর RevenueCat sync ঠিক এই status-টাই লেখে। তাই purchase-এর পর sync হলে `isPremiumUser` `true` হয়ে যায়। Premium lock-এর জন্য `isPremiumUser` অথবা `GET /subscriptions/my`-এর `isPremium`, যেকোনোটা ব্যবহার করা যায়। Sync-এর পরে profile আবার fetch করে নিন।
+
 Premium endpoint-এ Premium না থাকলে `403` আসে, message `"This feature is only available for premium users!"`। তখন paywall দেখান।
 
 | Premium লাগে                                                                              | Free (Premium ছাড়াই চলে)                                   |
@@ -232,6 +234,22 @@ Backend-এ cancel করার কোনো endpoint নেই, subscription st
 | `POST /subscriptions/test-purchase`      | User        | শুধু QA server-এ: RevenueCat ছাড়াই Premium চালু করে ([Testing](#৬-testing) দেখুন)।          |
 | `POST` / `PATCH` / `DELETE /packages`    | Admin       | Plan তৈরি, বদল, soft delete। `PATCH`-এ `{"isDeleted": false}` দিলে deleted plan ফিরে আসে।    |
 | `POST /subscriptions/webhook/revenuecat` | RevenueCat  | শুধু RevenueCat call করে, অ্যাপ নয়।                                                         |
+
+### Access token refresh
+
+`GET /auth/refresh-token` (method `GET`, `POST` নয়; কোনো `Authorization` header লাগে না)। Login-এর সময় `isMobileApp: true` দিলে body-তে পাওয়া `refreshToken` এখানে `x-refresh-token` header-এ পাঠান।
+
+```json
+{
+  "success": true,
+  "message": "Token refreshed successfully!",
+  "data": { "accessToken": "<new access token>" }
+}
+```
+
+শুধু নতুন access token আসে, refresh token একই থাকে। `401` এলে (token মেয়াদোত্তীর্ণ, password বদলানো হয়েছে, বা account block) ইউজারকে আবার login করান।
+
+Currency code সব response-এ lowercase আসে (`"gbp"`)। দেখানোর সময় uppercase করে নিন।
 
 ### `GET /packages` response
 
